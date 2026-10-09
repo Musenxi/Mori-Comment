@@ -15,6 +15,7 @@ export function sqliteStore(path: string): Store {
       // 老数据库：先补上后来加的列（CREATE TABLE IF NOT EXISTS 不会改已经存在的表，schema.sql 里的索引要用到新列）
       const have = new Set(all('PRAGMA table_info(comments)').map((c) => c.name));
       if (have.size) for (const col of ['avatar_hash', 'url', 'email', 'ip']) if (!have.has(col)) db.exec(`ALTER TABLE comments ADD COLUMN ${col} TEXT`);
+      if (have.size && !have.has('author')) db.exec('ALTER TABLE comments ADD COLUMN author INTEGER NOT NULL DEFAULT 0');
       db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
     },
     async insert(c) { return Number(db.prepare(SQL.insert).run(...insertArgs(c)).lastInsertRowid); },

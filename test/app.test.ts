@@ -65,7 +65,7 @@ for (const [name, mk] of STORES) {
     const { post, call } = await setup({ autoApprove: 'all' });
     await post({ email: 'x@y.zz' });
     const c: any = ((await (await call('GET', `/comments?entry=${ENTRY}`)).json()) as any).comments[0];
-    assert.deepEqual(Object.keys(c).sort(), ['avatar', 'block', 'body', 'createdAt', 'end', 'id', 'name', 'parentId', 'prefix', 'quote', 'start', 'suffix', 'url']);
+    assert.deepEqual(Object.keys(c).sort(), ['author', 'avatar', 'block', 'body', 'createdAt', 'end', 'id', 'name', 'parentId', 'prefix', 'quote', 'start', 'suffix', 'url']);
     assert.ok(!JSON.stringify(c).includes('x@y.zz')); // 邮箱本身不出现；对外的只有头像哈希
   });
 
@@ -111,6 +111,24 @@ for (const [name, mk] of STORES) {
     assert.equal(await n(`?entry=${ENTRY}`), 1);
     assert.equal(await n('?entry=posts/x&status=approved'), 1);
     assert.equal(await n('?status=pending'), 0);
+  });
+
+  test(`[${name}] 博主发评论：直接通过、带标记；回复待审的评论时那条一起通过；要管理令牌`, async () => {
+    const { post, admin, call } = await setup();
+    const r: any = await (await post({ body: '读者的' })).json();
+    assert.equal(r.status, 'pending');
+    const pend: any = ((await (await admin('GET', '/comments?status=pending')).json()) as any).comments[0];
+    const res = await admin('POST', '/comments', { entry: ENTRY, body: '谢谢', name: '博主', email: 'Me@Example.com', parentId: pend.id });
+    assert.equal(res.status, 201);
+    const list: any = ((await (await call('GET', `/comments?entry=${ENTRY}`)).json()) as any).comments;
+    assert.equal(list.length, 2);
+    const mine = list.find((c: any) => c.author);
+    assert.equal(mine.parentId, pend.id);
+    assert.equal(mine.name, '博主');
+    assert.ok(mine.avatar);
+    assert.equal(list.find((c: any) => !c.author).author, false);
+    assert.equal((await call('POST', '/admin/comments', { entry: ENTRY, body: 'x', name: 'x' })).status, 401);
+    assert.equal((await admin('POST', '/comments', { entry: ENTRY, body: '', name: '博主' })).status, 400);
   });
 
   test(`[${name}] 管理列表带邮箱和 IP（原文），对外的不带`, async () => {

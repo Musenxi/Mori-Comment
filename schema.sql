@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS comments (
   url         TEXT,                          -- 读者留的网址（可选，只接受 http / https）
   ip          TEXT,                          -- 读者的 IP：限流用，也只在管理接口里给，对外不公开
   created_at  INTEGER NOT NULL,              -- 毫秒时间戳
+  author      INTEGER NOT NULL DEFAULT 0,    -- 1：博主在 Studio 里发的（站点上带“博主”标记）
   status      TEXT    NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'hidden')),
   parent_id   INTEGER REFERENCES comments(id)
 );

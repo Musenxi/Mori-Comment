@@ -16,6 +16,8 @@ export interface CommentRow {
   avatarHash: string | null;
   url: string | null;
   ip: string | null;
+  /** 博主在 Studio 里发的 */
+  author: boolean;
   createdAt: number;
   status: Status;
   parentId: number | null;
@@ -60,8 +62,8 @@ export interface Store {
 
 /** SQL 的公共部分：SQLite 和 D1 都是 `?` 占位符 */
 export const SQL = {
-  insert: `INSERT INTO comments (entry, block, start, "end", quote, prefix, suffix, body, name, email, avatar_hash, url, ip, created_at, status, parent_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  insert: `INSERT INTO comments (entry, block, start, "end", quote, prefix, suffix, body, name, email, avatar_hash, url, ip, author, created_at, status, parent_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   get: `SELECT * FROM comments WHERE id = ?`,
   listApproved: `SELECT * FROM comments WHERE entry = ? AND status = 'approved' ORDER BY created_at ASC, id ASC`,
   // 筛选条件传 NULL 表示不限；SQLite 和 D1 都是同一条语句
@@ -85,10 +87,10 @@ export const SQL = {
 /** 数据库列 → 驼峰 */
 export const fromDb = (r: any): CommentRow => ({
   id: r.id, entry: r.entry, block: r.block, start: r.start, end: r.end, quote: r.quote, prefix: r.prefix, suffix: r.suffix,
-  body: r.body, name: r.name, email: r.email ?? null, avatarHash: r.avatar_hash ?? null, url: r.url ?? null, ip: r.ip ?? null, createdAt: r.created_at, status: r.status, parentId: r.parent_id,
+  body: r.body, name: r.name, email: r.email ?? null, avatarHash: r.avatar_hash ?? null, url: r.url ?? null, ip: r.ip ?? null, author: !!r.author, createdAt: r.created_at, status: r.status, parentId: r.parent_id,
 });
 
-export const insertArgs = (c: NewComment) => [c.entry, c.block, c.start, c.end, c.quote, c.prefix, c.suffix, c.body, c.name, c.email, c.avatarHash, c.url, c.ip, c.createdAt, c.status, c.parentId];
+export const insertArgs = (c: NewComment) => [c.entry, c.block, c.start, c.end, c.quote, c.prefix, c.suffix, c.body, c.name, c.email, c.avatarHash, c.url, c.ip, c.author ? 1 : 0, c.createdAt, c.status, c.parentId];
 
 export const statusCounts = (rows: Array<{ status: Status; n: number }>): Record<Status, number> => {
   const out: Record<Status, number> = { pending: 0, approved: 0, hidden: 0 };

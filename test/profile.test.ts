@@ -78,7 +78,7 @@ test('老数据库（没有头像、网址、邮箱、IP 列）启动时自动�
   assert.equal(rows[0].avatarHash, null);
   assert.equal(rows[0].url, null);
   assert.equal(rows[0].email, null);
-  await store.insert({ entry: 'posts/a', block: null, start: null, end: null, quote: null, prefix: null, suffix: null, body: '新', name: '新朋友', email: 'n@b.cc', avatarHash: null, url: null, ip: '1.1.1.1', createdAt: 2, status: 'approved', parentId: null });
+  await store.insert({ entry: 'posts/a', block: null, start: null, end: null, quote: null, prefix: null, suffix: null, body: '新', name: '新朋友', email: 'n@b.cc', avatarHash: null, url: null, ip: '1.1.1.1', author: false, createdAt: 2, status: 'approved', parentId: null });
   assert.equal(await store.hasApprovedBefore('n@b.cc', '', null), true);
   assert.equal(await store.countRecentByIp('1.1.1.1', 0), 1);
 });

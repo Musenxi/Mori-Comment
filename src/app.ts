@@ -61,10 +61,10 @@ export const originAllowed = (allowOrigin: string | undefined, origin: string | 
   return list.includes('*') || (!!origin && list.includes(origin));
 };
 
-/** 对外的字段：不含邮箱、IP、状态这些内部信息。avatar 是头像哈希（Gravatar 那种），url 是读者留的网址 */
+/** 对外的字段：不含邮箱、IP、状态这些内部信息。avatar 是头像哈希（Gravatar 那种），url 是读者留的网址，author 是博主发的 */
 export const publicOf = (c: CommentRow) => ({
   id: c.id, block: c.block, start: c.start, end: c.end, quote: c.quote, prefix: c.prefix, suffix: c.suffix,
-  body: c.body, name: c.name, avatar: c.avatarHash, url: c.url, createdAt: c.createdAt, parentId: c.parentId,
+  body: c.body, name: c.name, avatar: c.avatarHash, url: c.url, author: c.author, createdAt: c.createdAt, parentId: c.parentId,
 });
 
 /** 读者留的网址：只收 http / https，去掉首尾空白；没写返回 ''，写了但不合法返回 null */
@@ -172,7 +172,7 @@ export function createApp(opts: AppOptions) {
     const id = await store.insert({
       entry, block: anchor?.block ?? null, start: anchor?.start ?? null, end: anchor?.end ?? null,
       quote: anchor?.quote ?? null, prefix: anchor?.prefix ?? null, suffix: anchor?.suffix ?? null,
-      body, name, email: mail, avatarHash, url: url || null, ip, createdAt: t, status, parentId,
+      body, name, email: mail, avatarHash, url: url || null, ip, author: false, createdAt: t, status, parentId,
     });
     const saved = (await store.get(id))!;
     return c.json({ status, comment: status === 'approved' ? publicOf(saved) : undefined }, 201);
@@ -224,6 +224,29 @@ export function createApp(opts: AppOptions) {
     // 管理列表多带 status、邮箱、IP，其余同对外字段
     const entry = c.req.query('entry');
     return c.json({ comments: (await store.listAdmin(status, limit, entry && ENTRY.test(entry) ? entry : undefined)).map((r) => ({ ...publicOf(r), entry: r.entry, status: r.status, email: r.email, ip: r.ip })) });
+  });
+  /** 博主发评论（Studio 里用）：直接通过，带“博主”标记，不限流。回复待审的评论时，那条一起通过 */
+  admin.post('/comments', async (c) => {
+    const b = await c.req.json().catch(() => null);
+    if (!b || typeof b !== 'object') return c.json({ error: '请求格式不对' }, 400);
+    const entry = clip(b.entry, 200), body = clip(b.body, LIMITS.body), name = clip(b.name, LIMITS.name), mail = clip(b.email, LIMITS.email).toLowerCase();
+    const url = cleanUrl(b.url);
+    if (!ENTRY.test(entry)) return c.json({ error: 'entry 不合法' }, 400);
+    if (!body) return c.json({ error: '评论不能是空的' }, 400);
+    if (!name) return c.json({ error: '没有作者名字' }, 400);
+    if (url === null) return c.json({ error: '网址格式不对' }, 400);
+    let parentId: number | null = null;
+    if (b.parentId != null) {
+      const p = isInt(b.parentId) ? await store.get(b.parentId) : null;
+      if (!p || p.entry !== entry) return c.json({ error: '要回复的评论不存在' }, 400);
+      if (p.status === 'pending') await store.setStatus(p.id, 'approved');
+      parentId = p.parentId ?? p.id;
+    }
+    const id = await store.insert({
+      entry, block: null, start: null, end: null, quote: null, prefix: null, suffix: null,
+      body, name, email: mail || null, avatarHash: mail ? md5(mail) : null, url: url || null, ip: null, author: true, createdAt: now(), status: 'approved', parentId,
+    });
+    return c.json({ comment: publicOf((await store.get(id))!) }, 201);
   });
   admin.get('/stats', async (c) => c.json(await store.countByStatus()));
   admin.get('/traffic', async (c) => {
