@@ -22,9 +22,9 @@ export function d1Store(db: D1Like): Store {
     async setStatus(id, status: Status) { return (await run(SQL.setStatus, status, id)).meta.changes > 0; },
     async remove(id) { return (await run(SQL.remove, id, id)).meta.changes > 0; },
     async countRecentByIp(ip, since) { return (await one(SQL.countRecentByIp, ip, since)).n; },
-    async hasApprovedBefore(emailHash, name, ipHash) {
-      if (emailHash) return !!(await one(SQL.approvedByEmail, emailHash));
-      return ipHash ? !!(await one(SQL.approvedByNameIp, name, ipHash)) : false;
+    async hasApprovedBefore(email, name, ip) {
+      if (email) return !!(await one(SQL.approvedByEmail, email));
+      return ip ? !!(await one(SQL.approvedByNameIp, name, ip)) : false;
     },
     async lastView(visitor, entry) { return (await one(SQL.lastView, visitor, entry))?.at ?? null; },
     async addView(visitor, entry, at) {

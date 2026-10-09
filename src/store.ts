@@ -12,10 +12,10 @@ export interface CommentRow {
   suffix: string | null;
   body: string;
   name: string;
-  emailHash: string | null;
+  email: string | null;
   avatarHash: string | null;
   url: string | null;
-  ipHash: string | null;
+  ip: string | null;
   createdAt: number;
   status: Status;
   parentId: number | null;
@@ -40,9 +40,9 @@ export interface Store {
   /** 删除；有回复时回复一起删 */
   remove(id: number): Promise<boolean>;
   /** 这个 IP 在 since 之后发了几条（限流用） */
-  countRecentByIp(ipHash: string, since: number): Promise<number>;
+  countRecentByIp(ip: string, since: number): Promise<number>;
   /** 这个人以前有没有被通过的评论（决定要不要先审后发） */
-  hasApprovedBefore(emailHash: string | null, name: string, ipHash: string | null): Promise<boolean>;
+  hasApprovedBefore(email: string | null, name: string, ip: string | null): Promise<boolean>;
 
   /* 阅读量（在线访客不进数据库，见 presence.ts） */
   /** 这位读者上一次被计数地读这一篇是什么时候；没有就是 null */
@@ -60,7 +60,7 @@ export interface Store {
 
 /** SQL 的公共部分：SQLite 和 D1 都是 `?` 占位符 */
 export const SQL = {
-  insert: `INSERT INTO comments (entry, block, start, "end", quote, prefix, suffix, body, name, email_hash, avatar_hash, url, ip_hash, created_at, status, parent_id)
+  insert: `INSERT INTO comments (entry, block, start, "end", quote, prefix, suffix, body, name, email, avatar_hash, url, ip, created_at, status, parent_id)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   get: `SELECT * FROM comments WHERE id = ?`,
   listApproved: `SELECT * FROM comments WHERE entry = ? AND status = 'approved' ORDER BY created_at ASC, id ASC`,
@@ -69,9 +69,9 @@ export const SQL = {
   count: `SELECT status, COUNT(*) AS n FROM comments GROUP BY status`,
   setStatus: `UPDATE comments SET status = ? WHERE id = ?`,
   remove: `DELETE FROM comments WHERE id = ? OR parent_id = ?`,
-  countRecentByIp: `SELECT COUNT(*) AS n FROM comments WHERE ip_hash = ? AND created_at > ?`,
-  approvedByEmail: `SELECT 1 AS x FROM comments WHERE email_hash = ? AND status = 'approved' LIMIT 1`,
-  approvedByNameIp: `SELECT 1 AS x FROM comments WHERE name = ? AND ip_hash = ? AND status = 'approved' LIMIT 1`,
+  countRecentByIp: `SELECT COUNT(*) AS n FROM comments WHERE ip = ? AND created_at > ?`,
+  approvedByEmail: `SELECT 1 AS x FROM comments WHERE email = ? AND status = 'approved' LIMIT 1`,
+  approvedByNameIp: `SELECT 1 AS x FROM comments WHERE name = ? AND ip = ? AND status = 'approved' LIMIT 1`,
 
   lastView: `SELECT at FROM view_recent WHERE visitor = ? AND entry = ?`,
   markView: `INSERT INTO view_recent (visitor, entry, at) VALUES (?, ?, ?) ON CONFLICT (visitor, entry) DO UPDATE SET at = excluded.at`,
@@ -85,10 +85,10 @@ export const SQL = {
 /** 数据库列 → 驼峰 */
 export const fromDb = (r: any): CommentRow => ({
   id: r.id, entry: r.entry, block: r.block, start: r.start, end: r.end, quote: r.quote, prefix: r.prefix, suffix: r.suffix,
-  body: r.body, name: r.name, emailHash: r.email_hash, avatarHash: r.avatar_hash ?? null, url: r.url ?? null, ipHash: r.ip_hash, createdAt: r.created_at, status: r.status, parentId: r.parent_id,
+  body: r.body, name: r.name, email: r.email ?? null, avatarHash: r.avatar_hash ?? null, url: r.url ?? null, ip: r.ip ?? null, createdAt: r.created_at, status: r.status, parentId: r.parent_id,
 });
 
-export const insertArgs = (c: NewComment) => [c.entry, c.block, c.start, c.end, c.quote, c.prefix, c.suffix, c.body, c.name, c.emailHash, c.avatarHash, c.url, c.ipHash, c.createdAt, c.status, c.parentId];
+export const insertArgs = (c: NewComment) => [c.entry, c.block, c.start, c.end, c.quote, c.prefix, c.suffix, c.body, c.name, c.email, c.avatarHash, c.url, c.ip, c.createdAt, c.status, c.parentId];
 
 export const statusCounts = (rows: Array<{ status: Status; n: number }>): Record<Status, number> => {
   const out: Record<Status, number> = { pending: 0, approved: 0, hidden: 0 };

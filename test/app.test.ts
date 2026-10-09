@@ -113,6 +113,14 @@ for (const [name, mk] of STORES) {
     assert.equal(await n('?status=pending'), 0);
   });
 
+  test(`[${name}] 管理列表带邮箱和 IP（原文），对外的不带`, async () => {
+    const { post, admin } = await setup({ autoApprove: 'all' });
+    await post({ body: 'a', email: 'Reader@Example.com' }, { 'cf-connecting-ip': '3.3.3.3' });
+    const c: any = ((await (await admin('GET', '/comments')).json()) as any).comments[0];
+    assert.equal(c.ip, '3.3.3.3');
+    assert.equal(c.email, 'reader@example.com');
+  });
+
   test(`[${name}] 蜜罐字段有内容：假装成功但不存`, async () => {
     const { post, admin } = await setup();
     const r = await post({ website: 'http://spam' });

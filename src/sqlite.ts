@@ -12,10 +12,10 @@ export function sqliteStore(path: string): Store {
   const one = (sql: string, ...args: any[]) => db.prepare(sql).get(...args) as any;
   return {
     async init() {
-      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-      // 老数据库：补上后来加的列（CREATE TABLE IF NOT EXISTS 不会改已经存在的表）
+      // 老数据库：先补上后来加的列（CREATE TABLE IF NOT EXISTS 不会改已经存在的表，schema.sql 里的索引要用到新列）
       const have = new Set(all('PRAGMA table_info(comments)').map((c) => c.name));
-      for (const col of ['avatar_hash', 'url']) if (!have.has(col)) db.exec(`ALTER TABLE comments ADD COLUMN ${col} TEXT`);
+      if (have.size) for (const col of ['avatar_hash', 'url', 'email', 'ip']) if (!have.has(col)) db.exec(`ALTER TABLE comments ADD COLUMN ${col} TEXT`);
+      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
     },
     async insert(c) { return Number(db.prepare(SQL.insert).run(...insertArgs(c)).lastInsertRowid); },
     async get(id) { const r = one(SQL.get, id); return r ? fromDb(r) : null; },
@@ -25,9 +25,9 @@ export function sqliteStore(path: string): Store {
     async setStatus(id, status: Status) { return Number(db.prepare(SQL.setStatus).run(status, id).changes) > 0; },
     async remove(id) { return Number(db.prepare(SQL.remove).run(id, id).changes) > 0; },
     async countRecentByIp(ip, since) { return one(SQL.countRecentByIp, ip, since).n; },
-    async hasApprovedBefore(emailHash, name, ipHash) {
-      if (emailHash) return !!one(SQL.approvedByEmail, emailHash);
-      return ipHash ? !!one(SQL.approvedByNameIp, name, ipHash) : false;
+    async hasApprovedBefore(email, name, ip) {
+      if (email) return !!one(SQL.approvedByEmail, email);
+      return ip ? !!one(SQL.approvedByNameIp, name, ip) : false;
     },
     async lastView(visitor, entry) { return one(SQL.lastView, visitor, entry)?.at ?? null; },
     async addView(visitor, entry, at) { db.prepare(SQL.markView).run(visitor, entry, at); db.prepare(SQL.addView).run(entry); },

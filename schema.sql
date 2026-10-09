@@ -1,4 +1,5 @@
 -- MORI 评论：文末评论和划词引用评论是同一种评论，区别只是有没有“钉”在文字上（block 不为空的就是引用评论）
+-- 老数据库里还有 email_hash、ip_hash 两列（以前邮箱和 IP 只存加盐哈希），留着不用
 CREATE TABLE IF NOT EXISTS comments (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   entry       TEXT    NOT NULL,              -- posts/<id>（普通文章和游记都在 posts 下）
@@ -10,16 +11,16 @@ CREATE TABLE IF NOT EXISTS comments (
   suffix      TEXT,
   body        TEXT    NOT NULL,
   name        TEXT    NOT NULL,
-  email_hash  TEXT,                          -- 邮箱只存哈希（加盐的，用来判断“是不是老朋友”）
+  email       TEXT,                          -- 读者的邮箱：只在管理接口里给（Studio 评论页显示），对外只给下面的头像哈希
   avatar_hash TEXT,                          -- 头像哈希：小写邮箱的 MD5（Gravatar / Cravatar 认的那种）；老评论没有
   url         TEXT,                          -- 读者留的网址（可选，只接受 http / https）
-  ip_hash     TEXT,                          -- IP 只存加盐哈希，用来限流
+  ip          TEXT,                          -- 读者的 IP：限流用，也只在管理接口里给，对外不公开
   created_at  INTEGER NOT NULL,              -- 毫秒时间戳
   status      TEXT    NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'hidden')),
   parent_id   INTEGER REFERENCES comments(id)
 );
 CREATE INDEX IF NOT EXISTS idx_comments_entry ON comments (entry, status, created_at);
-CREATE INDEX IF NOT EXISTS idx_comments_ip ON comments (ip_hash, created_at);
+CREATE INDEX IF NOT EXISTS idx_comments_addr ON comments (ip, created_at);
 CREATE INDEX IF NOT EXISTS idx_comments_status ON comments (status, created_at);
 
 -- 阅读量：每篇一行，累计次数。entry 和评论的一样：posts/<id>、pages/<id>

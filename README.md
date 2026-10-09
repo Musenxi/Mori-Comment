@@ -17,7 +17,7 @@ ADMIN_TOKEN=… SALT=… ALLOW_ORIGIN=https://你的站点 node bin/mori-comment
 PORT=8787                 端口
 DB_PATH=./comments.db     数据库文件
 ADMIN_TOKEN=…             管理令牌（Studio 里填它）；不设，审核、隐藏、删除的接口就是关的
-SALT=…                    给邮箱和 IP 做哈希的随机字符串；换了盐，“以前通过过”的判断会重置
+SALT=…                    随机字符串，给读者标识做哈希（阅读量去重用）
 ALLOW_ORIGIN=…            站点地址（跨域时）
 TURNSTILE_SECRET=…        可选：人机验证
 AUTO_APPROVE=returning    returning（通过过的人直接发）/ all / none
@@ -31,7 +31,7 @@ Docker：`docker build -t mori-comments .`；和站点、Caddy 一起部署见�
 
 ## 升级
 
-Node + SQLite 版启动时自动给旧库补上头像、网址两列和阅读量的表。D1 上已经建好的库要手动执行：`wrangler d1 execute <库名> --file=migrations-001-profile.sql`（加头像、网址两列，只执行一次），再执行一次 `--file=schema.sql`（建阅读量的表，可以重复执行）。新建的库只用 `schema.sql`。
+Node + SQLite 版启动时自动给旧库补上头像、网址、邮箱、IP 四列和阅读量的表。D1 上已经建好的库要手动执行：`wrangler d1 execute <库名> --file=migrations-001-profile.sql`（加头像、网址两列，只执行一次）、`--file=migrations-002-ip.sql`（加邮箱、IP 两列，只执行一次），再执行一次 `--file=schema.sql`（建阅读量的表，可以重复执行）。新建的库只用 `schema.sql`。
 
 ## 开发
 

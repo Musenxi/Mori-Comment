@@ -63,7 +63,7 @@ test('网址不合法：拒绝，并说明原因', async () => {
   assert.match(((await r.json()) as any).error, /网址/);
 });
 
-test('老数据库（没有头像、网址两列）启动时自动补上，旧评论照常读出', async () => {
+test('老数据库（没有头像、网址、邮箱、IP 列）启动时自动补上，旧评论照常读出，新评论能写', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'mori-'));
   const path = join(dir, 'old.db');
   const old = new DatabaseSync(path);
@@ -77,4 +77,8 @@ test('老数据库（没有头像、网址两列）启动时自动补上，旧�
   assert.equal(rows.length, 1);
   assert.equal(rows[0].avatarHash, null);
   assert.equal(rows[0].url, null);
+  assert.equal(rows[0].email, null);
+  await store.insert({ entry: 'posts/a', block: null, start: null, end: null, quote: null, prefix: null, suffix: null, body: '新', name: '新朋友', email: 'n@b.cc', avatarHash: null, url: null, ip: '1.1.1.1', createdAt: 2, status: 'approved', parentId: null });
+  assert.equal(await store.hasApprovedBefore('n@b.cc', '', null), true);
+  assert.equal(await store.countRecentByIp('1.1.1.1', 0), 1);
 });

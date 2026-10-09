@@ -29,7 +29,7 @@ export interface AppOptions {
   turnstileSecret?: string;
   /** 允许跨域的站点：'*' 或逗号分隔的来源，如 https://example.com */
   allowOrigin?: string;
-  /** 给邮箱和 IP 做哈希用的盐 */
+  /** 给读者标识（阅读量去重用）做哈希用的盐 */
   salt?: string;
   /** 新评论要不要先审：returning（默认）＝第一次留言的人先审后发，以前通过过的直接发；all 全部直接发；none 全部先审 */
   autoApprove?: 'returning' | 'all' | 'none';
@@ -61,7 +61,7 @@ export const originAllowed = (allowOrigin: string | undefined, origin: string | 
   return list.includes('*') || (!!origin && list.includes(origin));
 };
 
-/** 对外的字段：不含加盐的邮箱哈希、IP 哈希、状态之外的内部信息。avatar 是头像哈希（Gravatar 那种），url 是读者留的网址 */
+/** 对外的字段：不含邮箱、IP、状态这些内部信息。avatar 是头像哈希（Gravatar 那种），url 是读者留的网址 */
 export const publicOf = (c: CommentRow) => ({
   id: c.id, block: c.block, start: c.start, end: c.end, quote: c.quote, prefix: c.prefix, suffix: c.suffix,
   body: c.body, name: c.name, avatar: c.avatarHash, url: c.url, createdAt: c.createdAt, parentId: c.parentId,
@@ -156,24 +156,23 @@ export function createApp(opts: AppOptions) {
       if (!ok) return c.json({ error: '人机验证没通过，请刷新页面再试' }, 403);
     }
 
-    // 限流：按 IP 的哈希数最近一分钟和一天里发了几条
-    const ip = ipOf(c);
-    const ipHash = ip ? await sha256(`${salt}|ip|${ip}`) : null;
+    // 限流：按 IP 数最近一分钟和一天里发了几条
+    const ip = ipOf(c) || null;
     const t = now();
-    if (ipHash) {
-      if ((await store.countRecentByIp(ipHash, t - 60_000)) >= LIMITS.perMinute) return c.json({ error: '发得太快了，过一会儿再试' }, 429);
-      if ((await store.countRecentByIp(ipHash, t - 86_400_000)) >= LIMITS.perDay) return c.json({ error: '今天发得够多了，明天再来' }, 429);
+    if (ip) {
+      if ((await store.countRecentByIp(ip, t - 60_000)) >= LIMITS.perMinute) return c.json({ error: '发得太快了，过一会儿再试' }, 429);
+      if ((await store.countRecentByIp(ip, t - 86_400_000)) >= LIMITS.perDay) return c.json({ error: '今天发得够多了，明天再来' }, 429);
     }
 
-    const emailHash = await sha256(`${salt}|mail|${email.toLowerCase()}`);
-    const avatarHash = md5(email.toLowerCase());
+    const mail = email.toLowerCase();
+    const avatarHash = md5(mail);
     const mode = opts.autoApprove ?? 'returning';
-    const status: Status = mode === 'all' ? 'approved' : mode === 'none' ? 'pending' : (await store.hasApprovedBefore(emailHash, name, ipHash)) ? 'approved' : 'pending';
+    const status: Status = mode === 'all' ? 'approved' : mode === 'none' ? 'pending' : (await store.hasApprovedBefore(mail, name, ip)) ? 'approved' : 'pending';
 
     const id = await store.insert({
       entry, block: anchor?.block ?? null, start: anchor?.start ?? null, end: anchor?.end ?? null,
       quote: anchor?.quote ?? null, prefix: anchor?.prefix ?? null, suffix: anchor?.suffix ?? null,
-      body, name, emailHash, avatarHash, url: url || null, ipHash, createdAt: t, status, parentId,
+      body, name, email: mail, avatarHash, url: url || null, ip, createdAt: t, status, parentId,
     });
     const saved = (await store.get(id))!;
     return c.json({ status, comment: status === 'approved' ? publicOf(saved) : undefined }, 201);
@@ -222,9 +221,9 @@ export function createApp(opts: AppOptions) {
     const s = c.req.query('status');
     const status = s === 'pending' || s === 'approved' || s === 'hidden' ? s : undefined;
     const limit = Math.min(500, Math.max(1, Number(c.req.query('limit')) || 100));
-    // 管理列表多带一个 status，其余同对外字段
+    // 管理列表多带 status、邮箱、IP，其余同对外字段
     const entry = c.req.query('entry');
-    return c.json({ comments: (await store.listAdmin(status, limit, entry && ENTRY.test(entry) ? entry : undefined)).map((r) => ({ ...publicOf(r), entry: r.entry, status: r.status })) });
+    return c.json({ comments: (await store.listAdmin(status, limit, entry && ENTRY.test(entry) ? entry : undefined)).map((r) => ({ ...publicOf(r), entry: r.entry, status: r.status, email: r.email, ip: r.ip })) });
   });
   admin.get('/stats', async (c) => c.json(await store.countByStatus()));
   admin.get('/traffic', async (c) => {
