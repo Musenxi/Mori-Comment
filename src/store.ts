@@ -1,4 +1,5 @@
-export type Status = 'pending' | 'approved' | 'hidden';
+/** spam：垃圾箱 */
+export type Status = 'pending' | 'approved' | 'hidden' | 'spam';
 
 /** 数据库里的一行（驼峰命名，字段含义见 schema.sql） */
 export interface CommentRow {
@@ -35,12 +36,14 @@ export interface Store {
   get(id: number): Promise<CommentRow | null>;
   /** 某篇文章下已通过的评论，按时间从早到晚 */
   listApproved(entry: string): Promise<CommentRow[]>;
-  /** 管理用：按状态、按文章筛选（都不给就是全部），新的在前 */
+  /** 管理用：按状态、按文章筛选（不给状态就是垃圾箱以外的全部），新的在前 */
   listAdmin(status: Status | undefined, limit: number, entry?: string): Promise<CommentRow[]>;
   countByStatus(): Promise<Record<Status, number>>;
   setStatus(id: number, status: Status): Promise<boolean>;
   /** 删除；有回复时回复一起删 */
   remove(id: number): Promise<boolean>;
+  /** 清空垃圾箱，返回删了几条 */
+  clearSpam(): Promise<number>;
   /** 这个 IP 在 since 之后发了几条（限流用） */
   countRecentByIp(ip: string, since: number): Promise<number>;
   /** 这个人以前有没有被通过的评论（决定要不要先审后发） */
@@ -71,9 +74,10 @@ export const SQL = {
   get: `SELECT * FROM comments WHERE id = ?`,
   listApproved: `SELECT * FROM comments WHERE entry = ? AND status = 'approved' ORDER BY created_at ASC, id ASC`,
   // 筛选条件传 NULL 表示不限；SQLite 和 D1 都是同一条语句
-  listAdmin: `SELECT * FROM comments WHERE (? IS NULL OR status = ?) AND (? IS NULL OR entry = ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
+  listAdmin: `SELECT * FROM comments WHERE (CASE WHEN ? IS NULL THEN status != 'spam' ELSE status = ? END) AND (? IS NULL OR entry = ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
   count: `SELECT status, COUNT(*) AS n FROM comments GROUP BY status`,
   setStatus: `UPDATE comments SET status = ? WHERE id = ?`,
+  clearSpam: `DELETE FROM comments WHERE status = 'spam' OR parent_id IN (SELECT id FROM comments WHERE status = 'spam')`,
   remove: `DELETE FROM comments WHERE id = ? OR parent_id = ?`,
   countRecentByIp: `SELECT COUNT(*) AS n FROM comments WHERE ip = ? AND created_at > ?`,
   approvedByEmail: `SELECT 1 AS x FROM comments WHERE email = ? AND status = 'approved' LIMIT 1`,
@@ -100,7 +104,7 @@ export const fromDb = (r: any): CommentRow => ({
 export const insertArgs = (c: NewComment) => [c.entry, c.block, c.start, c.end, c.quote, c.prefix, c.suffix, c.body, c.name, c.email, c.avatarHash, c.url, c.ip, c.author ? 1 : 0, c.createdAt, c.status, c.parentId];
 
 export const statusCounts = (rows: Array<{ status: Status; n: number }>): Record<Status, number> => {
-  const out: Record<Status, number> = { pending: 0, approved: 0, hidden: 0 };
+  const out: Record<Status, number> = { pending: 0, approved: 0, hidden: 0, spam: 0 };
   for (const r of rows) out[r.status] = r.n;
   return out;
 };

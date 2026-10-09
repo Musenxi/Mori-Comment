@@ -1,5 +1,5 @@
 -- MORI 评论：文末评论和划词引用评论是同一种评论，区别只是有没有“钉”在文字上（block 不为空的就是引用评论）
--- 老数据库里还有 email_hash、ip_hash 两列（以前邮箱和 IP 只存加盐哈希），留着不用
+-- status：pending 待审、approved 通过、hidden 隐藏、spam 垃圾箱（命中防垃圾规则，或在 Studio 里标成垃圾）
 CREATE TABLE IF NOT EXISTS comments (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   entry       TEXT    NOT NULL,              -- posts/<id>（普通文章和游记都在 posts 下）
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS comments (
   ip          TEXT,                          -- 读者的 IP：限流用，也只在管理接口里给，对外不公开
   created_at  INTEGER NOT NULL,              -- 毫秒时间戳
   author      INTEGER NOT NULL DEFAULT 0,    -- 1：博主在 Studio 里发的（站点上带“博主”标记）
-  status      TEXT    NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'hidden')),
+  status      TEXT    NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'hidden', 'spam')),
   parent_id   INTEGER REFERENCES comments(id)
 );
 CREATE INDEX IF NOT EXISTS idx_comments_entry ON comments (entry, status, created_at);

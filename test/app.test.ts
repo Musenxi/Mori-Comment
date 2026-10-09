@@ -131,16 +131,36 @@ for (const [name, mk] of STORES) {
     assert.equal((await admin('POST', '/comments', { entry: ENTRY, body: '', name: '博主' })).status, 400);
   });
 
-  test(`[${name}] 防垃圾规则：管理接口存取，命中的评论被拒绝、不存；IP 写错 400`, async () => {
-    const { post, admin } = await setup({ autoApprove: 'all' });
+  test(`[${name}] 防垃圾规则：管理接口存取；命中的进垃圾箱（对读者只说等审核），不在“全部”里、不公开；IP 写错 400`, async () => {
+    const { post, admin, call } = await setup({ autoApprove: 'all' });
     assert.deepEqual(((await (await admin('GET', '/settings')).json()) as any).spam, { words: [], ips: [], urls: [], names: [] });
     const saved: any = await (await admin('PUT', '/settings', { spam: { words: '广告\n', ips: ['1.2.3.0/24'], urls: [], names: [] } })).json();
     assert.deepEqual(saved.spam.words, ['广告']);
-    assert.equal((await post({ body: '打个广告' }, { 'cf-connecting-ip': '8.8.8.8' })).status, 403);
-    assert.equal((await post({ body: '正常的' }, { 'cf-connecting-ip': '1.2.3.9' })).status, 403);
-    assert.equal((await post({ body: '正常的' }, { 'cf-connecting-ip': '8.8.8.8' })).status, 201);
-    assert.equal(((await (await admin('GET', '/comments')).json()) as any).comments.length, 1);
+    const r1 = await post({ body: '打个广告' }, { 'cf-connecting-ip': '8.8.8.8' });
+    assert.equal(r1.status, 201);
+    assert.deepEqual(await r1.json(), { status: 'pending' });
+    assert.equal(((await (await post({ body: '正常的' }, { 'cf-connecting-ip': '1.2.3.9' })).json()) as any).status, 'pending');
+    assert.equal(((await (await post({ body: '正常的' }, { 'cf-connecting-ip': '8.8.8.8' })).json()) as any).status, 'approved');
+    const list = async (q: string) => ((await (await admin('GET', `/comments${q}`)).json()) as any).comments;
+    assert.equal((await list('')).length, 1);
+    assert.equal((await list('?status=spam')).length, 2);
+    assert.deepEqual(await (await admin('GET', '/stats')).json(), { pending: 0, approved: 1, hidden: 0, spam: 2 });
+    assert.equal(((await (await call('GET', `/comments?entry=${ENTRY}`)).json()) as any).comments.length, 1);
     assert.equal((await admin('PUT', '/settings', { spam: { ips: ['1.2.3'] } })).status, 400);
+  });
+
+  test(`[${name}] 垃圾箱：手动标成垃圾、捞回来、清空（连带回复）`, async () => {
+    const { post, admin } = await setup({ autoApprove: 'all' });
+    const a: any = await (await post({ body: 'a' })).json();
+    const b: any = await (await post({ body: 'b' }, { 'cf-connecting-ip': '2.2.2.2' })).json();
+    await post({ body: '回复 a', parentId: a.comment.id }, { 'cf-connecting-ip': '3.3.3.3' });
+    assert.equal((await admin('PATCH', `/comments/${a.comment.id}`, { status: 'spam' })).status, 200);
+    assert.equal((await admin('PATCH', `/comments/${b.comment.id}`, { status: 'spam' })).status, 200);
+    assert.equal((await admin('PATCH', `/comments/${b.comment.id}`, { status: 'approved' })).status, 200);
+    const r: any = await (await admin('DELETE', '/spam')).json();
+    assert.equal(r.removed, 2);
+    const left = ((await (await admin('GET', '/comments')).json()) as any).comments;
+    assert.deepEqual(left.map((c: any) => c.body), ['b']);
   });
 
   test(`[${name}] 管理列表带邮箱和 IP（原文），对外的不带`, async () => {

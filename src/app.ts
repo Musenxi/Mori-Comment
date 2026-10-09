@@ -157,11 +157,8 @@ export function createApp(opts: AppOptions) {
       if (!ok) return c.json({ error: '人机验证没通过，请刷新页面再试' }, 403);
     }
 
-    // 防垃圾：命中屏蔽词、IP 段、网址、昵称的直接拒绝（不说是哪一条）
-    const ip = ipOf(c) || null;
-    if (blocked(await spamRules(), { body, name, url: url || '', ip })) return c.json({ error: '评论没有通过检查' }, 403);
-
     // 限流：按 IP 数最近一分钟和一天里发了几条
+    const ip = ipOf(c) || null;
     const t = now();
     if (ip) {
       if ((await store.countRecentByIp(ip, t - 60_000)) >= LIMITS.perMinute) return c.json({ error: '发得太快了，过一会儿再试' }, 429);
@@ -171,7 +168,9 @@ export function createApp(opts: AppOptions) {
     const mail = email.toLowerCase();
     const avatarHash = md5(mail);
     const mode = opts.autoApprove ?? 'returning';
-    const status: Status = mode === 'all' ? 'approved' : mode === 'none' ? 'pending' : (await store.hasApprovedBefore(mail, name, ip)) ? 'approved' : 'pending';
+    // 防垃圾：命中屏蔽词、IP 段、网址、昵称的进垃圾箱；对读者只说“等审核”，不让人知道被拦了
+    const spam = blocked(await spamRules(), { body, name, url: url || '', ip });
+    const status: Status = spam ? 'spam' : mode === 'all' ? 'approved' : mode === 'none' ? 'pending' : (await store.hasApprovedBefore(mail, name, ip)) ? 'approved' : 'pending';
 
     const id = await store.insert({
       entry, block: anchor?.block ?? null, start: anchor?.start ?? null, end: anchor?.end ?? null,
@@ -179,7 +178,7 @@ export function createApp(opts: AppOptions) {
       body, name, email: mail, avatarHash, url: url || null, ip, author: false, createdAt: t, status, parentId,
     });
     const saved = (await store.get(id))!;
-    return c.json({ status, comment: status === 'approved' ? publicOf(saved) : undefined }, 201);
+    return c.json({ status: spam ? 'pending' : status, comment: status === 'approved' ? publicOf(saved) : undefined }, 201);
   });
 
   /* ───────────── 阅读量、在线访客 ─────────────
@@ -227,7 +226,7 @@ export function createApp(opts: AppOptions) {
   });
   admin.get('/comments', async (c) => {
     const s = c.req.query('status');
-    const status = s === 'pending' || s === 'approved' || s === 'hidden' ? s : undefined;
+    const status = s === 'pending' || s === 'approved' || s === 'hidden' || s === 'spam' ? s : undefined;
     const limit = Math.min(500, Math.max(1, Number(c.req.query('limit')) || 100));
     // 管理列表多带 status、邮箱、IP，其余同对外字段
     const entry = c.req.query('entry');
@@ -273,13 +272,14 @@ export function createApp(opts: AppOptions) {
   admin.patch('/comments/:id', async (c) => {
     const id = Number(c.req.param('id'));
     const { status } = await c.req.json().catch(() => ({}));
-    if (!Number.isInteger(id) || !['pending', 'approved', 'hidden'].includes(status)) return c.json({ error: '参数不对' }, 400);
+    if (!Number.isInteger(id) || !['pending', 'approved', 'hidden', 'spam'].includes(status)) return c.json({ error: '参数不对' }, 400);
     return (await store.setStatus(id, status)) ? c.json({ ok: true }) : c.json({ error: '没有这条评论' }, 404);
   });
   admin.delete('/comments/:id', async (c) => {
     const id = Number(c.req.param('id'));
     return Number.isInteger(id) && (await store.remove(id)) ? c.json({ ok: true }) : c.json({ error: '没有这条评论' }, 404);
   });
+  admin.delete('/spam', async (c) => c.json({ ok: true, removed: await store.clearSpam() }));
   app.route('/admin', admin);
 
   return app;

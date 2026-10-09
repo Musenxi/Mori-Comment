@@ -63,7 +63,7 @@ test('网址不合法：拒绝，并说明原因', async () => {
   assert.match(((await r.json()) as any).error, /网址/);
 });
 
-test('老数据库（没有头像、网址、邮箱、IP 列）启动时自动补上，旧评论照常读出，新评论能写', async () => {
+test('老数据库（少列、状态里没有 spam）启动时按新结构重建，旧评论照常读出，新评论能写、能进垃圾箱', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'mori-'));
   const path = join(dir, 'old.db');
   const old = new DatabaseSync(path);
@@ -81,4 +81,8 @@ test('老数据库（没有头像、网址、邮箱、IP 列）启动时自动�
   await store.insert({ entry: 'posts/a', block: null, start: null, end: null, quote: null, prefix: null, suffix: null, body: '新', name: '新朋友', email: 'n@b.cc', avatarHash: null, url: null, ip: '1.1.1.1', author: false, createdAt: 2, status: 'approved', parentId: null });
   assert.equal(await store.hasApprovedBefore('n@b.cc', '', null), true);
   assert.equal(await store.countRecentByIp('1.1.1.1', 0), 1);
+  assert.equal(await store.setStatus(rows[0].id, 'spam'), true);
+  assert.deepEqual(await store.countByStatus(), { pending: 0, approved: 1, hidden: 0, spam: 1 });
+  const cols = new DatabaseSync(path).prepare('PRAGMA table_info(comments)').all().map((c: any) => c.name);
+  assert.ok(!cols.includes('email_hash') && cols.includes('author'));
 });

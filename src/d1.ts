@@ -20,6 +20,7 @@ export function d1Store(db: D1Like): Store {
     async listAdmin(status, limit, entry) { return (await all(SQL.listAdmin, status ?? null, status ?? null, entry ?? null, entry ?? null, limit)).map(fromDb); },
     async countByStatus() { return statusCounts(await all(SQL.count)); },
     async setStatus(id, status: Status) { return (await run(SQL.setStatus, status, id)).meta.changes > 0; },
+    async clearSpam() { return (await run(SQL.clearSpam)).meta.changes; },
     async remove(id) { return (await run(SQL.remove, id, id)).meta.changes > 0; },
     async countRecentByIp(ip, since) { return (await one(SQL.countRecentByIp, ip, since)).n; },
     async hasApprovedBefore(email, name, ip) {
