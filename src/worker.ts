@@ -1,9 +1,10 @@
 /**
  * Cloudflare Workers 入口。绑定见 wrangler.example.toml：D1 库 `DB`，在线访客的 Durable Object `ONLINE`，
- * 环境变量 ADMIN_TOKEN、TURNSTILE_SECRET、ALLOW_ORIGIN、SALT。
+ * 环境变量 ADMIN_TOKEN、TURNSTILE_SECRET、ALLOW_ORIGIN、SALT；发邮件提醒可以绑 send_email `EMAIL`。
  */
 import { createApp, isBot, visitorKey, originAllowed, ipFrom, type AppOptions } from './app.ts';
 import { d1Store, type D1Like } from './d1.ts';
+import { sendBinding, sendHttp, type EmailBinding } from './mail.ts';
 
 export { OnlinePresence } from './presence-do.ts';
 
@@ -16,6 +17,8 @@ interface Env {
   ALLOW_ORIGIN?: string;
   SALT?: string;
   AUTO_APPROVE?: AppOptions['autoApprove'];
+  /** Cloudflare Email Service 的 send_email 绑定；有它就不用在 Studio 里填账号 ID 和令牌 */
+  EMAIL?: EmailBinding;
 }
 
 export default {
@@ -37,6 +40,8 @@ export default {
     const app = createApp({
       store: d1Store(env.DB), adminToken: env.ADMIN_TOKEN, turnstileSecret: env.TURNSTILE_SECRET,
       allowOrigin: env.ALLOW_ORIGIN, salt: env.SALT, autoApprove: env.AUTO_APPROVE,
+      // Workers 不能用 SMTP；选了 Cloudflare 又绑了 send_email 就走绑定，其余走 HTTP 接口
+      sendMail: (m, mail) => (m.provider === 'cloudflare' && env.EMAIL && !m.cloudflare.apiToken ? sendBinding(env.EMAIL, m, mail) : sendHttp(m, mail)),
       online: presence ? async () => ((await (await presence.fetch('https://online/count')).json()) as { online: number }).online : undefined,
       onView: presence ? async (views) => { await presence.fetch('https://online/views', { method: 'POST', body: String(views) }); } : undefined,
     });

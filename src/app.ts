@@ -20,6 +20,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { md5 } from './md5.ts';
 import { NO_RULES, blocked, cleanRules, type SpamRules } from './spam.ts';
+import { authorMail, cleanMail, publicMail, readMail, replyMail, testMail, type MailComment, type SendMail } from './mail.ts';
 import type { Store, CommentRow, Status } from './store.ts';
 
 export interface AppOptions {
@@ -40,6 +41,8 @@ export interface AppOptions {
   onView?: (total: number) => void | Promise<void>;
   now?: () => number;
   fetchImpl?: typeof fetch;
+  /** 发一封邮件（Node 和 Workers 各自实现，见 node.ts、worker.ts）；不给就不发提醒 */
+  sendMail?: SendMail;
 }
 
 export const LIMITS = { name: 40, email: 120, url: 200, body: 4000, quote: 600, context: 200, perMinute: 3, perDay: 20 };
@@ -89,6 +92,12 @@ function safeEqual(a: string, b: string) {
   let d = 0;
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;
+}
+
+/** 回完请求再做的事：Workers 里交给 waitUntil（不然请求一结束就被掐掉），Node 里直接在后台跑 */
+function later(c: any, p: Promise<unknown>) {
+  const q = p.catch((e) => console.error(e));
+  try { c.executionCtx.waitUntil(q); } catch { /* Node 没有 executionCtx */ }
 }
 
 const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -144,11 +153,12 @@ export function createApp(opts: AppOptions) {
     }
 
     // 回复：只能回复同一篇里已通过的评论；回复回复的，挂到最上面那条下面（只有一层）
-    let parentId: number | null = null;
+    let parentId: number | null = null, target: CommentRow | null = null;
     if (b.parentId != null) {
       const p = isInt(b.parentId) ? await store.get(b.parentId) : null;
       if (!p || p.entry !== entry || p.status !== 'approved') return c.json({ error: '要回复的评论不存在' }, 400);
       parentId = p.parentId ?? p.id;
+      target = p;
     }
 
     // 人机验证
@@ -178,6 +188,8 @@ export function createApp(opts: AppOptions) {
       body, name, email: mail, avatarHash, url: url || null, ip, author: false, createdAt: t, status, parentId,
     });
     const saved = (await store.get(id))!;
+    // 邮件提醒：博主（垃圾箱里的不提醒）；读者（回复直接通过时，提醒被回复的那位）
+    if (!spam) later(c, notify(saved, clip(b.title, 200) || undefined, status === 'approved' ? target : null, true));
     return c.json({ status: spam ? 'pending' : status, comment: status === 'approved' ? publicOf(saved) : undefined }, 201);
   });
 
@@ -217,6 +229,23 @@ export function createApp(opts: AppOptions) {
     try { return cleanRules(JSON.parse((await store.getSetting('spam')) ?? 'null')); } catch { return NO_RULES; }
   };
 
+  const mailSettings = async () => readMail(await store.getSetting('mail'));
+
+  /**
+   * 发提醒：toAuthor 时给博主发“有新评论”（博主自己发的不算）；target 是被回复的那条，给它的作者发“有人回复”
+   * （没留邮箱、是博主自己、或者自己回复自己就不发）。出错只记日志，不影响评论本身
+   */
+  async function notify(c: CommentRow, title: string | undefined, target: CommentRow | null, toAuthor: boolean) {
+    if (!opts.sendMail) return;
+    const m = await mailSettings();
+    if (m.provider === 'off') return;
+    const mc: MailComment = { id: c.id, entry: c.entry, name: c.name, email: c.email, url: c.url, ip: c.ip, body: c.body, status: c.status };
+    const jobs: Promise<void>[] = [];
+    if (toAuthor && m.notifyAuthor && m.to && !c.author) jobs.push(opts.sendMail(m, authorMail(m, mc, title)));
+    if (m.notifyReply && target?.email && !target.author && target.email !== c.email) jobs.push(opts.sendMail(m, replyMail(m, target.email, target, mc, title)));
+    for (const r of await Promise.allSettled(jobs)) if (r.status === 'rejected') console.error(`邮件提醒发送失败：${(r.reason as Error)?.message ?? r.reason}`);
+  }
+
   const admin = new Hono();
   admin.use('*', async (c, next) => {
     if (!opts.adminToken) return c.json({ error: '管理接口没有开启（没设置管理令牌）' }, 503);
@@ -242,20 +271,41 @@ export function createApp(opts: AppOptions) {
     if (!body) return c.json({ error: '评论不能是空的' }, 400);
     if (!name) return c.json({ error: '没有作者名字' }, 400);
     if (url === null) return c.json({ error: '网址格式不对' }, 400);
-    let parentId: number | null = null;
+    let parentId: number | null = null, target: CommentRow | null = null;
     if (b.parentId != null) {
       const p = isInt(b.parentId) ? await store.get(b.parentId) : null;
       if (!p || p.entry !== entry) return c.json({ error: '要回复的评论不存在' }, 400);
       if (p.status === 'pending') await store.setStatus(p.id, 'approved');
       parentId = p.parentId ?? p.id;
+      target = p;
     }
     const id = await store.insert({
       entry, block: null, start: null, end: null, quote: null, prefix: null, suffix: null,
       body, name, email: mail || null, avatarHash: mail ? md5(mail) : null, url: url || null, ip: null, author: true, createdAt: now(), status: 'approved', parentId,
     });
-    return c.json({ comment: publicOf((await store.get(id))!) }, 201);
+    const saved = (await store.get(id))!;
+    later(c, notify(saved, clip(b.title, 200) || undefined, target, false));
+    return c.json({ comment: publicOf(saved) }, 201);
   });
-  /** 管理设置：目前只有防垃圾规则 */
+  /** 邮件提醒的设置：密码、Key 只进不出；留空表示不改 */
+  admin.get('/mail', async (c) => c.json({ mail: publicMail(await mailSettings()) }));
+  admin.put('/mail', async (c) => {
+    const b = await c.req.json().catch(() => null);
+    let m;
+    try { m = cleanMail(b?.mail, await mailSettings()); } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+    await store.setSetting('mail', JSON.stringify(m));
+    return c.json({ mail: publicMail(m) });
+  });
+  /** 按已保存的设置给博主的邮箱发一封测试信，失败就把原因带回去 */
+  admin.post('/mail/test', async (c) => {
+    const m = await mailSettings();
+    if (m.provider === 'off') return c.json({ error: '邮件提醒没有打开' }, 400);
+    if (!m.to) return c.json({ error: '还没有填收件邮箱' }, 400);
+    if (!opts.sendMail) return c.json({ error: '这个评论服务不能发邮件' }, 501);
+    try { await opts.sendMail(m, testMail(m)); } catch (e) { return c.json({ error: `发送失败：${(e as Error).message}` }, 502); }
+    return c.json({ ok: true });
+  });
+  /** 管理设置：防垃圾规则 */
   admin.get('/settings', async (c) => c.json({ spam: await spamRules() }));
   admin.put('/settings', async (c) => {
     const b = await c.req.json().catch(() => null);
@@ -273,7 +323,11 @@ export function createApp(opts: AppOptions) {
     const id = Number(c.req.param('id'));
     const { status } = await c.req.json().catch(() => ({}));
     if (!Number.isInteger(id) || !['pending', 'approved', 'hidden', 'spam'].includes(status)) return c.json({ error: '参数不对' }, 400);
-    return (await store.setStatus(id, status)) ? c.json({ ok: true }) : c.json({ error: '没有这条评论' }, 404);
+    const before = Number.isInteger(id) ? await store.get(id) : null;
+    if (!before || !(await store.setStatus(id, status))) return c.json({ error: '没有这条评论' }, 404);
+    // 待审的回复被通过了：这时才提醒被回复的读者（只知道挂在哪一条下面）
+    if (before.status === 'pending' && status === 'approved' && before.parentId) later(c, notify({ ...before, status }, undefined, await store.get(before.parentId), false));
+    return c.json({ ok: true });
   });
   admin.delete('/comments/:id', async (c) => {
     const id = Number(c.req.param('id'));

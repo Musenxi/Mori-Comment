@@ -22,6 +22,10 @@ class_name = "OnlinePresence"
 tag = "v1"
 new_sqlite_classes = ["OnlinePresence"]
 
+# 邮件提醒用 Cloudflare Email Service 的话（要先在 Email Service 里接入发信域名）：绑上它，Studio 里发信方式选 Cloudflare，账号 ID 和令牌留空
+# [[send_email]]
+# name = "EMAIL"
+
 [vars]
 ALLOW_ORIGIN = "https://你的站点"   # 允许调用评论接口的站点，多个用逗号分隔
 # AUTO_APPROVE = "returning"        # returning 第一次留言先审 / all 全部直接发 / none 全部先审

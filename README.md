@@ -25,6 +25,14 @@ AUTO_APPROVE=returning    returning（通过过的人直接发）/ all / none
 
 Docker：`docker build -t mori-comments .`；和站点、Caddy 一起部署见主题的 [deploy/](https://github.com/Musenxi/Astro-Theme-Mori/tree/main/deploy)。
 
+## 邮件提醒
+
+在 Studio 的“设定 → 评论 → 邮件提醒”里填，存在评论服务的数据库里。有新评论时提醒博主（垃圾箱里的不提醒），有人回复时提醒被回复的读者。发信方式三选一：
+
+- SMTP：QQ 邮箱、163、Gmail 等的 SMTP 服务器和授权码。465 端口直接 TLS，其他端口用 STARTTLS。只有 Node 版能用。
+- Resend：API Key，发信域名要先在 Resend 验证。
+- Cloudflare Email Service：Workers 版绑上 `send_email`（见 `wrangler.example.toml`）就不用填别的；Node 版填账号 ID 和 API 令牌，走它的 REST 接口。发信域名要先接入 Email Service。
+
 ## Cloudflare Workers + D1
 
 见 `wrangler.example.toml` 顶部的四步。

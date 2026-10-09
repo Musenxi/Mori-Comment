@@ -5,6 +5,11 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { createApp, isBot, visitorKey, originAllowed, ipFrom, type AppOptions } from './app.ts';
 import { sqliteStore } from './sqlite.ts';
 import { Presence } from './presence.ts';
+import { sendHttp, type SendMail } from './mail.ts';
+import { sendSmtp } from './smtp.ts';
+
+/** Node 版发信：SMTP 自己连；Resend、Cloudflare 走 HTTP 接口 */
+const sendMail: SendMail = (m, mail) => (m.provider === 'smtp' ? sendSmtp(m, mail) : sendHttp(m, mail));
 
 /** 服务端每隔多久 ping 一次；上一轮没回 pong 的连接当作已经断了 */
 const SWEEP = 30_000;
@@ -14,7 +19,7 @@ export async function startNode(o: { dbPath: string; port: number } & Omit<AppOp
   const store = sqliteStore(o.dbPath);
   await store.init();
   const presence = new Presence();
-  const app = createApp({ ...o, store, online: async () => presence.count(), onView: (views) => presence.toWatchers({ views }) });
+  const app = createApp({ sendMail, ...o, store, online: async () => presence.count(), onView: (views) => presence.toWatchers({ views }) });
   const server = serve({ fetch: app.fetch, port: o.port, hostname: '0.0.0.0' });
 
   /* 在线访客：/online/ws 的升级请求不经过 Hono，直接在这里接 */
