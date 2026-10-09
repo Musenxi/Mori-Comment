@@ -19,6 +19,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { md5 } from './md5.ts';
+import { NO_RULES, blocked, cleanRules, type SpamRules } from './spam.ts';
 import type { Store, CommentRow, Status } from './store.ts';
 
 export interface AppOptions {
@@ -156,8 +157,11 @@ export function createApp(opts: AppOptions) {
       if (!ok) return c.json({ error: '人机验证没通过，请刷新页面再试' }, 403);
     }
 
-    // 限流：按 IP 数最近一分钟和一天里发了几条
+    // 防垃圾：命中屏蔽词、IP 段、网址、昵称的直接拒绝（不说是哪一条）
     const ip = ipOf(c) || null;
+    if (blocked(await spamRules(), { body, name, url: url || '', ip })) return c.json({ error: '评论没有通过检查' }, 403);
+
+    // 限流：按 IP 数最近一分钟和一天里发了几条
     const t = now();
     if (ip) {
       if ((await store.countRecentByIp(ip, t - 60_000)) >= LIMITS.perMinute) return c.json({ error: '发得太快了，过一会儿再试' }, 429);
@@ -210,6 +214,10 @@ export function createApp(opts: AppOptions) {
 
   /* ───────────── 管理接口 ───────────── */
 
+  const spamRules = async (): Promise<SpamRules> => {
+    try { return cleanRules(JSON.parse((await store.getSetting('spam')) ?? 'null')); } catch { return NO_RULES; }
+  };
+
   const admin = new Hono();
   admin.use('*', async (c, next) => {
     if (!opts.adminToken) return c.json({ error: '管理接口没有开启（没设置管理令牌）' }, 503);
@@ -247,6 +255,15 @@ export function createApp(opts: AppOptions) {
       body, name, email: mail || null, avatarHash: mail ? md5(mail) : null, url: url || null, ip: null, author: true, createdAt: now(), status: 'approved', parentId,
     });
     return c.json({ comment: publicOf((await store.get(id))!) }, 201);
+  });
+  /** 管理设置：目前只有防垃圾规则 */
+  admin.get('/settings', async (c) => c.json({ spam: await spamRules() }));
+  admin.put('/settings', async (c) => {
+    const b = await c.req.json().catch(() => null);
+    let spam: SpamRules;
+    try { spam = cleanRules(b?.spam); } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+    await store.setSetting('spam', JSON.stringify(spam));
+    return c.json({ spam });
   });
   admin.get('/stats', async (c) => c.json(await store.countByStatus()));
   admin.get('/traffic', async (c) => {

@@ -30,6 +30,8 @@ export function sqliteStore(path: string): Store {
       if (email) return !!one(SQL.approvedByEmail, email);
       return ip ? !!one(SQL.approvedByNameIp, name, ip) : false;
     },
+    async getSetting(key) { return one(SQL.getSetting, key)?.value ?? null; },
+    async setSetting(key, value) { db.prepare(SQL.setSetting).run(key, value); },
     async lastView(visitor, entry) { return one(SQL.lastView, visitor, entry)?.at ?? null; },
     async addView(visitor, entry, at) { db.prepare(SQL.markView).run(visitor, entry, at); db.prepare(SQL.addView).run(entry); },
     async pruneViews(before) { db.prepare(SQL.pruneViews).run(before); },

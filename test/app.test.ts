@@ -131,6 +131,18 @@ for (const [name, mk] of STORES) {
     assert.equal((await admin('POST', '/comments', { entry: ENTRY, body: '', name: '博主' })).status, 400);
   });
 
+  test(`[${name}] 防垃圾规则：管理接口存取，命中的评论被拒绝、不存；IP 写错 400`, async () => {
+    const { post, admin } = await setup({ autoApprove: 'all' });
+    assert.deepEqual(((await (await admin('GET', '/settings')).json()) as any).spam, { words: [], ips: [], urls: [], names: [] });
+    const saved: any = await (await admin('PUT', '/settings', { spam: { words: '广告\n', ips: ['1.2.3.0/24'], urls: [], names: [] } })).json();
+    assert.deepEqual(saved.spam.words, ['广告']);
+    assert.equal((await post({ body: '打个广告' }, { 'cf-connecting-ip': '8.8.8.8' })).status, 403);
+    assert.equal((await post({ body: '正常的' }, { 'cf-connecting-ip': '1.2.3.9' })).status, 403);
+    assert.equal((await post({ body: '正常的' }, { 'cf-connecting-ip': '8.8.8.8' })).status, 201);
+    assert.equal(((await (await admin('GET', '/comments')).json()) as any).comments.length, 1);
+    assert.equal((await admin('PUT', '/settings', { spam: { ips: ['1.2.3'] } })).status, 400);
+  });
+
   test(`[${name}] 管理列表带邮箱和 IP（原文），对外的不带`, async () => {
     const { post, admin } = await setup({ autoApprove: 'all' });
     await post({ body: 'a', email: 'Reader@Example.com' }, { 'cf-connecting-ip': '3.3.3.3' });

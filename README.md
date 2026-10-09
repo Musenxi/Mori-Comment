@@ -2,7 +2,7 @@
 
 [MORI](https://github.com/Musenxi/Astro-Theme-Mori) 博客的自建评论服务：文末评论、划词引用评论、阅读量、在线访客。Hono 写一份，同时跑在 Node（SQLite）和 Cloudflare Workers（D1）上。
 
-站点这边在 `mori.config.ts` 里写 `comments: { provider: 'mori', endpoint: '评论服务的地址' }`，管理在 [Studio](https://github.com/Musenxi/Mori-Studio) 的“评论”页。
+站点这边在 `mori.config.ts` 里写 `comments: { provider: 'mori', endpoint: '评论服务的地址' }`，管理在 [Studio](https://github.com/Musenxi/Mori-Studio) 的“评论”页；防垃圾规则（屏蔽词、IP 段、网址、昵称）在 Studio 的“设定 → 评论”里填，存在评论服务的数据库里。
 
 ## Node + SQLite
 
@@ -31,7 +31,7 @@ Docker：`docker build -t mori-comments .`；和站点、Caddy 一起部署见�
 
 ## 升级
 
-Node + SQLite 版启动时自动给旧库补上头像、网址、邮箱、IP、博主标记这几列和阅读量的表。D1 上已经建好的库要手动执行：`wrangler d1 execute <库名> --file=migrations-001-profile.sql`（加头像、网址两列，只执行一次）、`--file=migrations-002-ip.sql`（加邮箱、IP 两列）、`--file=migrations-003-author.sql`（加博主标记），各执行一次，再执行一次 `--file=schema.sql`（建阅读量的表，可以重复执行）。新建的库只用 `schema.sql`。
+Node + SQLite 版启动时自动给旧库补上头像、网址、邮箱、IP、博主标记这几列和阅读量的表。D1 上已经建好的库要手动执行：`wrangler d1 execute <库名> --file=migrations-001-profile.sql`（加头像、网址两列，只执行一次）、`--file=migrations-002-ip.sql`（加邮箱、IP 两列）、`--file=migrations-003-author.sql`（加博主标记），各执行一次，再执行一次 `--file=schema.sql`（建阅读量、设置的表，可以重复执行）。新建的库只用 `schema.sql`。
 
 ## 开发
 

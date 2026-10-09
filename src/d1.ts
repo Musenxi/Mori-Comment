@@ -26,6 +26,8 @@ export function d1Store(db: D1Like): Store {
       if (email) return !!(await one(SQL.approvedByEmail, email));
       return ip ? !!(await one(SQL.approvedByNameIp, name, ip)) : false;
     },
+    async getSetting(key) { return (await one(SQL.getSetting, key))?.value ?? null; },
+    async setSetting(key, value) { await run(SQL.setSetting, key, value); },
     async lastView(visitor, entry) { return (await one(SQL.lastView, visitor, entry))?.at ?? null; },
     async addView(visitor, entry, at) {
       const mark = db.prepare(SQL.markView).bind(visitor, entry, at), add = db.prepare(SQL.addView).bind(entry);

@@ -46,6 +46,10 @@ export interface Store {
   /** 这个人以前有没有被通过的评论（决定要不要先审后发） */
   hasApprovedBefore(email: string | null, name: string, ip: string | null): Promise<boolean>;
 
+  /** 管理设置：值是 JSON 字符串；没有就是 null */
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
+
   /* 阅读量（在线访客不进数据库，见 presence.ts） */
   /** 这位读者上一次被计数地读这一篇是什么时候；没有就是 null */
   lastView(visitor: string, entry: string): Promise<number | null>;
@@ -74,6 +78,9 @@ export const SQL = {
   countRecentByIp: `SELECT COUNT(*) AS n FROM comments WHERE ip = ? AND created_at > ?`,
   approvedByEmail: `SELECT 1 AS x FROM comments WHERE email = ? AND status = 'approved' LIMIT 1`,
   approvedByNameIp: `SELECT 1 AS x FROM comments WHERE name = ? AND ip = ? AND status = 'approved' LIMIT 1`,
+
+  getSetting: `SELECT value FROM settings WHERE key = ?`,
+  setSetting: `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
 
   lastView: `SELECT at FROM view_recent WHERE visitor = ? AND entry = ?`,
   markView: `INSERT INTO view_recent (visitor, entry, at) VALUES (?, ?, ?) ON CONFLICT (visitor, entry) DO UPDATE SET at = excluded.at`,

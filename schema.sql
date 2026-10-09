@@ -24,6 +24,12 @@ CREATE INDEX IF NOT EXISTS idx_comments_entry ON comments (entry, status, create
 CREATE INDEX IF NOT EXISTS idx_comments_addr ON comments (ip, created_at);
 CREATE INDEX IF NOT EXISTS idx_comments_status ON comments (status, created_at);
 
+-- 管理设置（Studio 里改）：一个键一行，值是 JSON。spam = 防垃圾规则（见 src/spam.ts）
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 -- 阅读量：每篇一行，累计次数。entry 和评论的一样：posts/<id>、pages/<id>
 CREATE TABLE IF NOT EXISTS views (
   entry  TEXT    PRIMARY KEY,
