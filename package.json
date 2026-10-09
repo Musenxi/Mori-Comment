@@ -2,7 +2,7 @@
   "name": "mori-comments",
   "version": "0.0.1",
   "description": "MORI 自建评论服务：文末评论 + 划词引用评论。Hono 写一份，同时跑在 Cloudflare Workers（D1）和 Node（SQLite）上。",
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./src/app.ts",
@@ -33,5 +33,6 @@
     "@types/node": "^26.6.3",
     "@types/ws": "^8.18.2",
     "typescript": "^6.0.3"
-  }
+  },
+  "packageManager": "pnpm@10.30.1"
 }
