@@ -14,5 +14,5 @@ const { server } = await startNode({
   adminToken: env.ADMIN_TOKEN, turnstileSecret: env.TURNSTILE_SECRET, allowOrigin: env.ALLOW_ORIGIN, salt: env.SALT,
   autoApprove: env.AUTO_APPROVE,
 });
-console.log(`MORI 评论服务已启动：端口 ${env.PORT ?? 8787}，数据库 ${env.DB_PATH ?? './comments.db'}`);
+console.log(`Mori 评论服务已启动：端口 ${env.PORT ?? 8787}，数据库 ${env.DB_PATH ?? './comments.db'}`);
 process.on('SIGINT', () => { server.close(); process.exit(0); });

@@ -1,4 +1,4 @@
--- MORI 评论：文末评论和划词引用评论是同一种评论，区别只是有没有“钉”在文字上（block 不为空的就是引用评论）
+-- Mori 评论：文末评论和划词引用评论是同一种评论，区别只是有没有“钉”在文字上（block 不为空的就是引用评论）
 -- status：pending 待审、approved 通过、hidden 隐藏、spam 垃圾箱（命中防垃圾规则，或在 Studio 里标成垃圾）
 CREATE TABLE IF NOT EXISTS comments (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

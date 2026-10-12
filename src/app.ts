@@ -1,5 +1,5 @@
 /**
- * MORI 自建评论的 HTTP 接口（spec §5.1）。Hono 写一份，Node 和 Cloudflare Workers 共用；
+ * Mori 自建评论的 HTTP 接口（spec §5.1）。Hono 写一份，Node 和 Cloudflare Workers 共用；
  * 存储通过 Store 接口注入（SQLite / D1）。
  *
  *   GET    /comments?entry=posts/xxx         某篇文章下已通过的评论（含划词引用评论）

@@ -1,6 +1,6 @@
-# MORI Comment
+# Mori Comment
 
-[MORI](https://github.com/Musenxi/Astro-Theme-Mori) 博客的自建评论服务：文末评论、划词引用评论、阅读量、在线访客。Hono 写一份，同时跑在 Node（SQLite）和 Cloudflare Workers（D1）上。
+[Mori](https://github.com/Musenxi/Astro-Theme-Mori) 博客的自建评论服务：文末评论、划词引用评论、阅读量、在线访客。Hono 写一份，同时跑在 Node（SQLite）和 Cloudflare Workers（D1）上。
 
 站点这边在 `mori.config.ts` 里写 `comments: { provider: 'mori', endpoint: '评论服务的地址' }`，管理在 [Studio](https://github.com/Musenxi/Mori-Studio) 的“评论”页；防垃圾规则（屏蔽词、IP 段、网址、昵称）在 Studio 的“设定 → 评论”里填，存在评论服务的数据库里；命中的评论进垃圾箱。
 
