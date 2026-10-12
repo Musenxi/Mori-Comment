@@ -19,7 +19,7 @@ export async function startNode(o: { dbPath: string; port: number } & Omit<AppOp
   const store = sqliteStore(o.dbPath);
   await store.init();
   const presence = new Presence();
-  const app = createApp({ sendMail, ...o, store, online: async () => presence.count(), onView: (views) => presence.toWatchers({ views }) });
+  const app = createApp({ sendMail, runtime: 'node', mailProviders: ['smtp', 'resend', 'cloudflare'], ...o, store, online: async () => presence.count(), onView: (views) => presence.toWatchers({ views }) });
   const server = serve({ fetch: app.fetch, port: o.port, hostname: '0.0.0.0' });
 
   /* 在线访客：/online/ws 的升级请求不经过 Hono，直接在这里接 */

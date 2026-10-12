@@ -10,11 +10,7 @@
  *   GET    /online/ws?visitor=…              WebSocket：连着就算在线，人数一变就推 {"online": n}；
  *                                            ?watch=1 只看、不算在线（Studio 仪表盘），另外每记一次阅读推 {"views": 全站阅读量}
  *                                            （升级请求不经过这里：Node 见 node.ts，Workers 见 worker.ts）
- *   GET    /admin/comments?status=&entry=    管理：列表        ┐ 只接受管理令牌
- *   GET    /admin/stats                      管理：各状态数量  │ Authorization: Bearer <token>
- *   GET    /admin/traffic                    管理：总阅读量、每篇阅读量、在线人数 │
- *   PATCH  /admin/comments/:id  {status}     管理：通过 / 隐藏 │
- *   DELETE /admin/comments/:id               管理：删除        ┘
+ *   /admin/*                                 管理接口，只接受管理令牌（Authorization: Bearer <token>），见 README 的“管理接口”
  */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -22,6 +18,10 @@ import { md5 } from './md5.ts';
 import { NO_RULES, blocked, cleanRules, type SpamRules } from './spam.ts';
 import { authorMail, cleanMail, publicMail, readMail, replyMail, testMail, type MailComment, type SendMail } from './mail.ts';
 import type { Store, CommentRow, Status } from './store.ts';
+import pkg from '../package.json' with { type: 'json' };
+
+/** 管理接口的版本：删字段、改含义时加一；只加字段、加接口不变（客户端看 /admin/info 的 features） */
+export const API_VERSION = 1;
 
 export interface AppOptions {
   store: Store;
@@ -43,6 +43,10 @@ export interface AppOptions {
   fetchImpl?: typeof fetch;
   /** 发一封邮件（Node 和 Workers 各自实现，见 node.ts、worker.ts）；不给就不发提醒 */
   sendMail?: SendMail;
+  /** 跑在哪里（/admin/info 里给出） */
+  runtime?: 'node' | 'workers';
+  /** 这个运行环境能用的发信方式 */
+  mailProviders?: Array<'smtp' | 'resend' | 'cloudflare'>;
 }
 
 export const LIMITS = { name: 40, email: 120, url: 200, body: 4000, quote: 600, context: 200, perMinute: 3, perDay: 20 };
@@ -102,6 +106,14 @@ function later(c: any, p: Promise<unknown>) {
 
 const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const isInt = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < 1_000_000;
+/** 时间戳参数：非负整数，否则当作没给 */
+const timeParam = (v: string | undefined) => (v && /^\d{1,15}$/.test(v) ? Number(v) : undefined);
+/** 翻页游标：上一页最后一条的 `创建时间.id` */
+const cursorOf = (c: CommentRow) => `${c.createdAt}.${c.id}`;
+const parseCursor = (v: string | undefined) => {
+  const m = /^(\d{1,15})\.(\d{1,9})$/.exec(v ?? '');
+  return m ? { createdAt: Number(m[1]), id: Number(m[2]) } : undefined;
+};
 
 export function createApp(opts: AppOptions) {
   const { store } = opts;
@@ -113,7 +125,7 @@ export function createApp(opts: AppOptions) {
   const anyOrigin = originAllowed(opts.allowOrigin, null); // 只有设成 * 时，没有来源也算允许
   app.use('*', cors({
     origin: (o) => (anyOrigin ? '*' : originAllowed(opts.allowOrigin, o) ? o : ''),
-    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     maxAge: 86400,
   }));
@@ -253,13 +265,28 @@ export function createApp(opts: AppOptions) {
     if (!h.startsWith('Bearer ') || !safeEqual(h.slice(7), opts.adminToken)) return c.json({ error: '没有权限' }, 401);
     await next();
   });
+  /** 服务的版本和能力：客户端（Studio）据此判断能用哪些功能；顺便验证令牌 */
+  admin.get('/info', async (c) => c.json({
+    service: 'mori-comments', version: pkg.version, api: API_VERSION, runtime: opts.runtime ?? null,
+    features: {
+      mail: opts.sendMail ? (opts.mailProviders ?? []) : [],
+      online: !!opts.online, turnstile: !!opts.turnstileSecret, cursor: true, since: true,
+    },
+    autoApprove: opts.autoApprove ?? 'returning',
+  }));
   admin.get('/comments', async (c) => {
     const s = c.req.query('status');
     const status = s === 'pending' || s === 'approved' || s === 'hidden' || s === 'spam' ? s : undefined;
     const limit = Math.min(500, Math.max(1, Number(c.req.query('limit')) || 100));
-    // 管理列表多带 status、邮箱、IP，其余同对外字段
     const entry = c.req.query('entry');
-    return c.json({ comments: (await store.listAdmin(status, limit, entry && ENTRY.test(entry) ? entry : undefined)).map((r) => ({ ...publicOf(r), entry: r.entry, status: r.status, email: r.email, ip: r.ip })) });
+    // 多取一条，看还有没有下一页
+    const rows = await store.listAdmin({ status, limit: limit + 1, entry: entry && ENTRY.test(entry) ? entry : undefined, since: timeParam(c.req.query('since')), before: parseCursor(c.req.query('before')) });
+    const page = rows.slice(0, limit);
+    // 管理列表多带 status、邮箱、IP，其余同对外字段
+    return c.json({
+      comments: page.map((r) => ({ ...publicOf(r), entry: r.entry, status: r.status, email: r.email, ip: r.ip })),
+      next: rows.length > limit ? cursorOf(page[page.length - 1]) : null,
+    });
   });
   /** 博主发评论（Studio 里用）：直接通过，带“博主”标记，不限流。回复待审的评论时，那条一起通过 */
   admin.post('/comments', async (c) => {
@@ -314,7 +341,11 @@ export function createApp(opts: AppOptions) {
     await store.setSetting('spam', JSON.stringify(spam));
     return c.json({ spam });
   });
-  admin.get('/stats', async (c) => c.json(await store.countByStatus()));
+  /** 各状态数量；带 ?since= 时多一个 since：那之后读者发的评论数（Studio 的“未读”） */
+  admin.get('/stats', async (c) => {
+    const since = timeParam(c.req.query('since'));
+    return c.json({ ...(await store.countByStatus()), ...(since === undefined ? {} : { since: await store.countSince(since) }) });
+  });
   admin.get('/traffic', async (c) => {
     const entries = await store.listViews();
     return c.json({ views: entries.reduce((a, e) => a + e.views, 0), online: await online(), entries });

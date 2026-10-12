@@ -212,4 +212,59 @@ for (const [name, mk] of STORES) {
     assert.notEqual(bad.headers.get('access-control-allow-origin'), 'https://evil.com');
   });
 
+  test(`[${name}] 管理接口：/info 给出版本和能力`, async () => {
+    const { admin, call } = await setup({ runtime: 'node', mailProviders: ['smtp'], sendMail: async () => {} });
+    assert.equal((await call('GET', '/admin/info')).status, 401);
+    const j: any = await (await admin('GET', '/info')).json();
+    assert.equal(j.service, 'mori-comments');
+    assert.equal(j.api, 1);
+    assert.equal(j.runtime, 'node');
+    assert.deepEqual(j.features.mail, ['smtp']);
+    assert.equal(typeof j.version, 'string');
+    const none: any = await (await (await setup()).admin('GET', '/info')).json();
+    assert.deepEqual(none.features.mail, []);
+  });
+
+  test(`[${name}] 管理列表：游标翻页不重不漏（同一毫秒也行），since 只要之后的`, async () => {
+    const { post, admin, tick } = await setup({ autoApprove: 'all' });
+    for (let i = 0; i < 7; i++) {
+      assert.equal((await post({ body: `第 ${i} 条` }, { 'cf-connecting-ip': `10.0.0.${i}` })).status, 201);
+      if (i % 2) tick(1000); // 有的同一毫秒，有的不同
+    }
+    const seen: string[] = [];
+    let next: string | null = null, pages = 0;
+    do {
+      const j: any = await (await admin('GET', `/comments?limit=3${next ? `&before=${next}` : ''}`)).json();
+      seen.push(...j.comments.map((c: any) => c.body));
+      next = j.next;
+      pages++;
+    } while (next);
+    assert.equal(pages, 3);
+    assert.deepEqual(seen, [6, 5, 4, 3, 2, 1, 0].map((i) => `第 ${i} 条`));
+
+    const all: any = await (await admin('GET', '/comments')).json();
+    const cut = all.comments[3].createdAt; // 第 3 条的时间（和第 2 条同一毫秒），不含这一刻
+    const after: any = await (await admin('GET', `/comments?since=${cut}`)).json();
+    assert.deepEqual(after.comments.map((c: any) => c.body), ['第 6 条', '第 5 条', '第 4 条']);
+    assert.equal(after.next, null);
+  });
+
+  test(`[${name}] /stats?since= 数之后读者发的，博主自己发的、垃圾不算`, async () => {
+    const { post, admin, tick } = await setup({ autoApprove: 'all' });
+    await post({ body: '早' });
+    tick(1000);
+    const t = 1_000_500;
+    await post({ body: '晚' }, { 'cf-connecting-ip': '5.5.5.5' });
+    await admin('POST', '/comments', { entry: ENTRY, body: '博主', name: '我' });
+    const st: any = await (await admin('GET', `/stats?since=${t}`)).json();
+    assert.equal(st.since, 1);
+    assert.equal(st.approved, 3);
+    assert.equal(((await (await admin('GET', '/stats')).json()) as any).since, undefined);
+  });
+
+  test(`[${name}] CORS 允许 PUT（保存设置）`, async () => {
+    const { app } = await setup({ allowOrigin: 'https://mysite.com' });
+    const r = await app.request('/admin/settings', { method: 'OPTIONS', headers: { Origin: 'https://mysite.com', 'Access-Control-Request-Method': 'PUT' } });
+    assert.match(r.headers.get('access-control-allow-methods') ?? '', /PUT/);
+  });
 }

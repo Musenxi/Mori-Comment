@@ -26,6 +26,15 @@ export interface CommentRow {
 
 export type NewComment = Omit<CommentRow, 'id'>;
 
+/** 管理列表的筛选：status 不给就是垃圾箱以外的全部；since 只要这个时间之后的；before 是翻页游标（上一页最后一条） */
+export interface AdminQuery {
+  status?: Status;
+  entry?: string;
+  limit: number;
+  since?: number;
+  before?: { createdAt: number; id: number };
+}
+
 /**
  * 存储层的接口：Node 用 SQLite，Cloudflare Workers 用 D1，SQL 是同一套。
  * 全部是异步的（D1 只有异步接口）。
@@ -36,9 +45,11 @@ export interface Store {
   get(id: number): Promise<CommentRow | null>;
   /** 某篇文章下已通过的评论，按时间从早到晚 */
   listApproved(entry: string): Promise<CommentRow[]>;
-  /** 管理用：按状态、按文章筛选（不给状态就是垃圾箱以外的全部），新的在前 */
-  listAdmin(status: Status | undefined, limit: number, entry?: string): Promise<CommentRow[]>;
+  /** 管理用：按 AdminQuery 筛选，新的在前 */
+  listAdmin(q: AdminQuery): Promise<CommentRow[]>;
   countByStatus(): Promise<Record<Status, number>>;
+  /** since 之后读者发的评论有几条（垃圾箱和博主自己发的不算） */
+  countSince(since: number): Promise<number>;
   setStatus(id: number, status: Status): Promise<boolean>;
   /** 删除；有回复时回复一起删 */
   remove(id: number): Promise<boolean>;
@@ -74,8 +85,11 @@ export const SQL = {
   get: `SELECT * FROM comments WHERE id = ?`,
   listApproved: `SELECT * FROM comments WHERE entry = ? AND status = 'approved' ORDER BY created_at ASC, id ASC`,
   // 筛选条件传 NULL 表示不限；SQLite 和 D1 都是同一条语句
-  listAdmin: `SELECT * FROM comments WHERE (CASE WHEN ? IS NULL THEN status != 'spam' ELSE status = ? END) AND (? IS NULL OR entry = ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
+  listAdmin: `SELECT * FROM comments WHERE (CASE WHEN ? IS NULL THEN status != 'spam' ELSE status = ? END) AND (? IS NULL OR entry = ?)
+             AND (? IS NULL OR created_at > ?) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+             ORDER BY created_at DESC, id DESC LIMIT ?`,
   count: `SELECT status, COUNT(*) AS n FROM comments GROUP BY status`,
+  countSince: `SELECT COUNT(*) AS n FROM comments WHERE created_at > ? AND status != 'spam' AND author = 0`,
   setStatus: `UPDATE comments SET status = ? WHERE id = ?`,
   clearSpam: `DELETE FROM comments WHERE status = 'spam' OR parent_id IN (SELECT id FROM comments WHERE status = 'spam')`,
   remove: `DELETE FROM comments WHERE id = ? OR parent_id = ?`,
@@ -100,6 +114,11 @@ export const fromDb = (r: any): CommentRow => ({
   id: r.id, entry: r.entry, block: r.block, start: r.start, end: r.end, quote: r.quote, prefix: r.prefix, suffix: r.suffix,
   body: r.body, name: r.name, email: r.email ?? null, avatarHash: r.avatar_hash ?? null, url: r.url ?? null, ip: r.ip ?? null, author: !!r.author, createdAt: r.created_at, status: r.status, parentId: r.parent_id,
 });
+
+export const listAdminArgs = ({ status, entry, limit, since, before }: AdminQuery) => {
+  const s = status ?? null, e = entry ?? null, t = since ?? null, b = before?.createdAt ?? null;
+  return [s, s, e, e, t, t, b, b, b, before?.id ?? null, limit];
+};
 
 export const insertArgs = (c: NewComment) => [c.entry, c.block, c.start, c.end, c.quote, c.prefix, c.suffix, c.body, c.name, c.email, c.avatarHash, c.url, c.ip, c.author ? 1 : 0, c.createdAt, c.status, c.parentId];
 

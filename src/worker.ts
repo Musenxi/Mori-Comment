@@ -40,6 +40,7 @@ export default {
     const app = createApp({
       store: d1Store(env.DB), adminToken: env.ADMIN_TOKEN, turnstileSecret: env.TURNSTILE_SECRET,
       allowOrigin: env.ALLOW_ORIGIN, salt: env.SALT, autoApprove: env.AUTO_APPROVE,
+      runtime: 'workers', mailProviders: ['resend', 'cloudflare'],
       // Workers 不能用 SMTP；选了 Cloudflare 又绑了 send_email 就走绑定，其余走 HTTP 接口
       sendMail: (m, mail) => (m.provider === 'cloudflare' && env.EMAIL && !m.cloudflare.apiToken ? sendBinding(env.EMAIL, m, mail) : sendHttp(m, mail)),
       online: presence ? async () => ((await (await presence.fetch('https://online/count')).json()) as { online: number }).online : undefined,

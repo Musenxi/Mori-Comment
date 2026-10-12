@@ -1,7 +1,7 @@
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { SQL, fromDb, insertArgs, statusCounts, type Store, type Status } from './store.ts';
+import { SQL, fromDb, listAdminArgs, insertArgs, statusCounts, type Store, type Status } from './store.ts';
 
 /** Node + SQLite（Node 内置的 node:sqlite，不需要编译原生模块） */
 export function sqliteStore(path: string): Store {
@@ -32,7 +32,8 @@ export function sqliteStore(path: string): Store {
     async insert(c) { return Number(db.prepare(SQL.insert).run(...insertArgs(c)).lastInsertRowid); },
     async get(id) { const r = one(SQL.get, id); return r ? fromDb(r) : null; },
     async listApproved(entry) { return all(SQL.listApproved, entry).map(fromDb); },
-    async listAdmin(status, limit, entry) { return all(SQL.listAdmin, status ?? null, status ?? null, entry ?? null, entry ?? null, limit).map(fromDb); },
+    async listAdmin(q) { return all(SQL.listAdmin, ...listAdminArgs(q)).map(fromDb); },
+    async countSince(since) { return one(SQL.countSince, since).n; },
     async countByStatus() { return statusCounts(all(SQL.count)); },
     async setStatus(id, status: Status) { return Number(db.prepare(SQL.setStatus).run(status, id).changes) > 0; },
     async clearSpam() { return Number(db.prepare(SQL.clearSpam).run().changes); },

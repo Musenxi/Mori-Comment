@@ -1,4 +1,4 @@
-import { SQL, fromDb, insertArgs, statusCounts, type Store, type Status } from './store.ts';
+import { SQL, fromDb, listAdminArgs, insertArgs, statusCounts, type Store, type Status } from './store.ts';
 
 /** Cloudflare D1。表要先建好：`wrangler d1 execute <库名> --file=schema.sql` */
 type D1Stmt = { all(): Promise<{ results: any[] }>; first(): Promise<any>; run(): Promise<{ meta: { changes: number; last_row_id: number } }> };
@@ -17,7 +17,8 @@ export function d1Store(db: D1Like): Store {
     async insert(c) { return (await run(SQL.insert, ...insertArgs(c))).meta.last_row_id; },
     async get(id) { const r = await one(SQL.get, id); return r ? fromDb(r) : null; },
     async listApproved(entry) { return (await all(SQL.listApproved, entry)).map(fromDb); },
-    async listAdmin(status, limit, entry) { return (await all(SQL.listAdmin, status ?? null, status ?? null, entry ?? null, entry ?? null, limit)).map(fromDb); },
+    async listAdmin(q) { return (await all(SQL.listAdmin, ...listAdminArgs(q))).map(fromDb); },
+    async countSince(since) { return (await one(SQL.countSince, since)).n; },
     async countByStatus() { return statusCounts(await all(SQL.count)); },
     async setStatus(id, status: Status) { return (await run(SQL.setStatus, status, id)).meta.changes > 0; },
     async clearSpam() { return (await run(SQL.clearSpam)).meta.changes; },
