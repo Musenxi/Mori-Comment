@@ -267,7 +267,7 @@ export function createApp(opts: AppOptions) {
   });
   /** 服务的版本和能力：客户端（Studio）据此判断能用哪些功能；顺便验证令牌 */
   admin.get('/info', async (c) => c.json({
-    service: 'mori-comments', version: pkg.version, api: API_VERSION, runtime: opts.runtime ?? null,
+    service: 'mori-comments', version: pkg.version, api: API_VERSION, schema: Number(await opts.store.getSetting('schema_version')) || 0, runtime: opts.runtime ?? null,
     features: {
       mail: opts.sendMail ? (opts.mailProviders ?? []) : [],
       online: !!opts.online, turnstile: !!opts.turnstileSecret, cursor: true, since: true,

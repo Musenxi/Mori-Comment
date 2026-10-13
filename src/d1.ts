@@ -1,6 +1,7 @@
+import { migrate } from './migrate.ts';
 import { SQL, fromDb, listAdminArgs, insertArgs, statusCounts, type Store, type Status } from './store.ts';
 
-/** Cloudflare D1。表要先建好：`wrangler d1 execute <库名> --file=schema.sql` */
+/** Cloudflare D1。表由服务自己建、自己升级（见 migrate.ts），不用手动执行 schema.sql */
 type D1Stmt = { all(): Promise<{ results: any[] }>; first(): Promise<any>; run(): Promise<{ meta: { changes: number; last_row_id: number } }> };
 export interface D1Like {
   prepare(sql: string): { bind(...args: any[]): D1Stmt };
@@ -13,7 +14,16 @@ export function d1Store(db: D1Like): Store {
   const one = (sql: string, ...a: any[]) => db.prepare(sql).bind(...a).first();
   const run = (sql: string, ...a: any[]) => db.prepare(sql).bind(...a).run();
   return {
-    async init() { /* 表由 wrangler d1 execute 建好 */ },
+    async init() {
+      await migrate({
+        all: (sql) => all(sql),
+        // batch 是一个事务；没有 batch（测试里的替身）就一条一条执行
+        async batch(stmts) {
+          const list = stmts.map((s) => db.prepare(s).bind());
+          if (db.batch) await db.batch(list); else for (const s of list) await s.run();
+        },
+      });
+    },
     async insert(c) { return (await run(SQL.insert, ...insertArgs(c))).meta.last_row_id; },
     async get(id) { const r = await one(SQL.get, id); return r ? fromDb(r) : null; },
     async listApproved(entry) { return (await all(SQL.listApproved, entry)).map(fromDb); },

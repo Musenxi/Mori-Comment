@@ -1,6 +1,7 @@
-import { readFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { migrate } from './migrate.ts';
 import { SQL, fromDb, listAdminArgs, insertArgs, statusCounts, type Store, type Status } from './store.ts';
 
 /** Node + SQLite（Node 内置的 node:sqlite，不需要编译原生模块） */
@@ -12,22 +13,16 @@ export function sqliteStore(path: string): Store {
   const one = (sql: string, ...args: any[]) => db.prepare(sql).get(...args) as any;
   return {
     async init() {
-      const schema = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
-      // 老数据库：表结构和 schema.sql 不一样（少列、状态里没有 spam）就按新结构重建（CREATE TABLE IF NOT EXISTS 不会改已经存在的表）
-      const old = one(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'comments'`)?.sql as string | undefined;
-      if (old) {
-        const ddl = schema.match(/CREATE TABLE IF NOT EXISTS comments \(([\s\S]*?)\n\);/)![1];
-        const have = new Set(all('PRAGMA table_info(comments)').map((c) => c.name));
-        const want = [...ddl.matchAll(/^\s+"?(\w+)"?\s+(?:INTEGER|TEXT)/gm)].map((m) => m[1]);
-        if (!old.includes("'spam'") || want.some((c) => !have.has(c))) {
-          const cols = want.filter((c) => have.has(c)).map((c) => `"${c}"`).join(', ');
+      await migrate({
+        all: async (sql) => all(sql),
+        // 重建表要先关外键（事务里改不了这个开关）
+        async batch(stmts) {
           db.exec('PRAGMA foreign_keys = OFF');
           try {
-            db.exec(`BEGIN; CREATE TABLE comments_new (${ddl}\n); INSERT INTO comments_new (${cols}) SELECT ${cols} FROM comments; DROP TABLE comments; ALTER TABLE comments_new RENAME TO comments; COMMIT;`);
+            db.exec(`BEGIN; ${stmts.join(';\n')}; COMMIT`);
           } catch (e) { db.exec('ROLLBACK'); throw e; } finally { db.exec('PRAGMA foreign_keys = ON'); }
-        }
-      }
-      db.exec(schema);
+        },
+      });
     },
     async insert(c) { return Number(db.prepare(SQL.insert).run(...insertArgs(c)).lastInsertRowid); },
     async get(id) { const r = one(SQL.get, id); return r ? fromDb(r) : null; },

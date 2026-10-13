@@ -21,6 +21,9 @@ interface Env {
   EMAIL?: EmailBinding;
 }
 
+/** 每个实例（isolate）第一次来的时候检查一次表结构，必要时升级；之后只是一个已完成的 Promise */
+let ready: Promise<void> | null = null;
+
 export default {
   async fetch(req: Request, env: Env, ctx: unknown) {
     // 全站只有一个在线名单
@@ -37,8 +40,10 @@ export default {
       return presence.fetch(`https://online/ws?visitor=${visitor}`, { headers: req.headers });
     }
 
+    const store = d1Store(env.DB);
+    try { await (ready ??= store.init()); } catch (e) { ready = null; return new Response(`数据库升级失败：${e instanceof Error ? e.message : e}`, { status: 500 }); }
     const app = createApp({
-      store: d1Store(env.DB), adminToken: env.ADMIN_TOKEN, turnstileSecret: env.TURNSTILE_SECRET,
+      store, adminToken: env.ADMIN_TOKEN, turnstileSecret: env.TURNSTILE_SECRET,
       allowOrigin: env.ALLOW_ORIGIN, salt: env.SALT, autoApprove: env.AUTO_APPROVE,
       runtime: 'workers', mailProviders: ['resend', 'cloudflare'],
       // Workers 不能用 SMTP；选了 Cloudflare 又绑了 send_email 就走绑定，其余走 HTTP 接口

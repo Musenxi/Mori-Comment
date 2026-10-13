@@ -59,12 +59,15 @@ Studio（以及以后桌面版里的 MCP 工具）通过这组接口管理评论
 
 ## 升级
 
-Node + SQLite 版启动时，旧库的表结构和 `schema.sql` 不一样就自动按新结构重建（数据搬过去），再补上阅读量、设置的表。D1 上已经建好的库要手动执行：`wrangler d1 execute <库名> --file=migrations-001-profile.sql`（加头像、网址两列，只执行一次）、`--file=migrations-002-ip.sql`（加邮箱、IP 两列）、`--file=migrations-003-author.sql`（加博主标记）、`--file=migrations-004-spam.sql`（重建表，加垃圾箱状态），各执行一次，再执行一次 `--file=schema.sql`（建阅读量、设置的表，可以重复执行）。新建的库只用 `schema.sql`。
+拉新代码、重新启动（Node）或 `wrangler deploy`（Workers）就行。服务启动时会对比库里记的表结构版本（`settings` 表里的 `schema_version`），落后了就自动升级：建缺的表和索引、补缺的列、重建旧的状态约束，评论数据都保留。SQLite 和 D1 都一样，不用手动执行 SQL。
+
+Studio 的“设定 → 更新”可以查有没有新版本（读的是 GitHub 上的 `package.json`）。
 
 ## 开发
 
 ```bash
 pnpm dev     # 管理令牌 dev-token，数据库在 .data/
 pnpm test
+pnpm schema # 改了 schema.sql 之后，重新生成 src/schema.ts
 pnpm check
 ```
