@@ -6,7 +6,7 @@ import { createApp, VIEW_WINDOW } from '../src/app.ts';
 import { sqliteStore } from '../src/sqlite.ts';
 import { d1Store } from '../src/d1.ts';
 import type { Store } from '../src/store.ts';
-import { Presence } from '../src/presence.ts';
+import { Presence, cleanPage } from '../src/presence.ts';
 import { OnlinePresence } from '../src/presence-do.ts';
 import { startNode } from '../src/node.ts';
 import { mkdtempSync } from 'node:fs';
@@ -100,6 +100,31 @@ test('在线名单：同一位读者开几个页面只算一个；只看人数�
   assert.deepEqual(b.got, [2, 1]);
 });
 
+test('在读的页面：同一位读者在同一页开几个只算一个；换页、离开都会推；不收站外路径', () => {
+  const p = new Presence();
+  const got: any[] = [];
+  const watcher = { send: (m: string) => got.push(JSON.parse(m)) };
+  const a1 = { send() {} }, a2 = { send() {} }, b = { send() {} };
+  p.join(watcher, null, '/x/'); // 只看的连接不算在哪一页
+  p.join(a1, 'a', '/posts/x/');
+  p.join(a2, 'a', '/posts/x/');
+  p.join(b, 'b', '/posts/x/');
+  assert.deepEqual(got.at(-1), { online: 2, pages: [['/posts/x/', 2]] });
+  const n = got.length;
+  const a3 = { send() {} };
+  p.join(a3, 'a', '/posts/x/');
+  assert.equal(got.length, n); // 没变就不推
+  p.leave(a3);
+  p.move(b, '/');
+  assert.deepEqual(got.at(-1), { online: 2, pages: [['/', 1], ['/posts/x/', 1]] });
+  p.move(a1, cleanPage('https://evil.example/'));
+  p.move(a2, cleanPage('/<b>hi</b>'));
+  assert.deepEqual(got.at(-1), { online: 2, pages: [['/', 1]] });
+  p.leave(b);
+  assert.deepEqual(got.at(-1), { online: 1, pages: [] });
+  assert.equal(cleanPage('/posts/%E4%BD%A0/?q=1#c'), '/posts/%E4%BD%A0/');
+});
+
 test('Node：连上 /online/ws 就算在线，断开就不算；来源不对的不收；只看的谁都能连，还会收到阅读量', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'mori-online-'));
   const { server } = await startNode({ dbPath: join(dir, 'c.db'), port: 0, allowOrigin: 'https://site.example', adminToken: 't' });
@@ -112,9 +137,12 @@ test('Node：连上 /online/ws 就算在线，断开就不算；来源不对的�
     const watch = ws('watch=1', 'http://127.0.0.1:4400');
     assert.equal(await next(watch), 0);
     const pushed = next(watch);
-    const a = ws(`visitor=${A}`);
+    const a = ws(`visitor=${A}&page=/posts/x/`);
     assert.equal(await next(a), 1);
     assert.equal(await pushed, 1);
+    const moved = new Promise<any>((ok) => watch.once('message', (d) => ok(JSON.parse(String(d)))));
+    a.send(JSON.stringify({ page: '/about/' }));
+    assert.deepEqual(await moved, { online: 1, pages: [['/about/', 1]] });
     assert.deepEqual(await http('/online'), { online: 1 });
     assert.equal((await http('/admin/traffic')).online, 1);
 
@@ -151,4 +179,19 @@ test('Workers 的 Durable Object：计数、关闭时推送（用假的 state）
   assert.deepEqual(b.got, []);
   dobj.webSocketClose(a1);
   assert.deepEqual(watch.got, [1]); // a 还开着另一个页面，人数没变
+});
+
+test('Workers 的 Durable Object：读者换页时更新附件并推送', () => {
+  const sock = (visitor: string | null, page: string | null = null) => {
+    let att = { visitor, page };
+    const got: any[] = [];
+    return { got, send: (m: string) => got.push(JSON.parse(m)), deserializeAttachment: () => att, serializeAttachment: (a: any) => { att = a; } };
+  };
+  const watch = sock(null), a = sock('a', '/');
+  const dobj = new OnlinePresence({ getWebSockets: () => [watch, a] });
+  dobj.webSocketMessage(a, JSON.stringify({ page: '/posts/x/' }));
+  assert.deepEqual(watch.got, [{ online: 1, pages: [['/posts/x/', 1]] }]);
+  dobj.webSocketMessage(a, JSON.stringify({ page: '/posts/x/' }));
+  dobj.webSocketMessage(watch, JSON.stringify({ page: '/' })); // 只看的连接报页面不算
+  assert.equal(watch.got.length, 1);
 });

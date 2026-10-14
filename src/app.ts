@@ -7,7 +7,8 @@
  *   POST   /views     {entry, visitor}       记一次阅读，返回这一篇的阅读量
  *   GET    /views?entry=posts/xxx            某篇的阅读量
  *   GET    /online                           在线人数
- *   GET    /online/ws?visitor=…              WebSocket：连着就算在线，人数一变就推 {"online": n}；
+ *   GET    /online/ws?visitor=…&page=/x/     WebSocket：连着就算在线，换页时发 {"page": "/y/"}；
+ *                                            人数或各页人数一变就推 {"online": n, "pages": [["/x/", n], …]}；
  *                                            ?watch=1 只看、不算在线（Studio 仪表盘），另外每记一次阅读推 {"views": 全站阅读量}
  *                                            （升级请求不经过这里：Node 见 node.ts，Workers 见 worker.ts）
  *   /admin/*                                 管理接口，只接受管理令牌（Authorization: Bearer <token>），见 README 的“管理接口”

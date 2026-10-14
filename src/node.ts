@@ -4,7 +4,7 @@ import { serve } from '@hono/node-server';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApp, isBot, visitorKey, originAllowed, ipFrom, type AppOptions } from './app.ts';
 import { sqliteStore } from './sqlite.ts';
-import { Presence } from './presence.ts';
+import { Presence, cleanPage } from './presence.ts';
 import { sendHttp, type SendMail } from './mail.ts';
 import { sendSmtp } from './smtp.ts';
 
@@ -38,10 +38,15 @@ export async function startNode(o: { dbPath: string; port: number } & Omit<AppOp
       const peer = { send: (m: string) => ws.send(m) };
       alive.set(ws, true);
       ws.on('pong', () => alive.set(ws, true));
-      ws.on('message', (d) => { alive.set(ws, true); if (String(d) === 'ping') ws.send('pong'); });
+      ws.on('message', (d) => {
+        alive.set(ws, true);
+        const m = String(d);
+        if (m === 'ping') return ws.send('pong');
+        if (m.length < 1000) try { presence.move(peer, cleanPage(JSON.parse(m).page)); } catch { /* 不认识的消息 */ }
+      });
       ws.on('close', () => presence.leave(peer));
       ws.on('error', () => ws.terminate());
-      presence.join(peer, visitor);
+      presence.join(peer, visitor, cleanPage(url.searchParams.get('page')));
     });
   });
   const sweep = setInterval(() => {

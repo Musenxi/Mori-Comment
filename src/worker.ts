@@ -5,6 +5,7 @@
 import { createApp, isBot, visitorKey, originAllowed, ipFrom, type AppOptions } from './app.ts';
 import { d1Store, type D1Like } from './d1.ts';
 import { sendBinding, sendHttp, type EmailBinding } from './mail.ts';
+import { cleanPage } from './presence.ts';
 
 export { OnlinePresence } from './presence-do.ts';
 
@@ -37,7 +38,8 @@ export default {
       const watch = url.searchParams.has('watch') || isBot(ua);
       if (!watch && !originAllowed(env.ALLOW_ORIGIN, req.headers.get('origin'))) return new Response('Forbidden', { status: 403 });
       const visitor = watch ? '' : await visitorKey(env.SALT ?? 'mori', url.searchParams.get('visitor'), ipFrom((k) => req.headers.get(k)), ua);
-      return presence.fetch(`https://online/ws?visitor=${visitor}`, { headers: req.headers });
+      const page = cleanPage(url.searchParams.get('page'));
+      return presence.fetch(`https://online/ws?visitor=${visitor}${page ? `&page=${encodeURIComponent(page)}` : ''}`, { headers: req.headers });
     }
 
     const store = d1Store(env.DB);
