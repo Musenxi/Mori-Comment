@@ -1,9 +1,8 @@
-# Cloudflare Workers + D1 部署评论服务
-#   1) wrangler d1 create mori-comments      （把输出的 database_id 填到下面）
-#   2) （不用建表：服务第一次收到请求时自己建，之后升级也自动）
-#   3) wrangler secret put ADMIN_TOKEN       （管理令牌，Studio 里用它审核评论）
+# Cloudflare Workers + D1 部署评论服务：复制成 wrangler.toml，然后
+#   1) wrangler d1 create mori-comments      （把输出的 database_id 填到下面；表服务自己建、自己升级）
+#   2) wrangler secret put ADMIN_TOKEN       （管理令牌，Studio 里填它）
 #      wrangler secret put TURNSTILE_SECRET  （可选：人机验证的密钥）
-#   4) wrangler deploy
+#   3) 改下面的 ALLOW_ORIGIN，wrangler deploy
 name = "mori-comments"
 main = "src/worker.ts"
 compatibility_date = "2025-09-01"
