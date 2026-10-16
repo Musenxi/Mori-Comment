@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { createApp, VIEW_WINDOW } from '../src/app.ts';
+import { createApp, resolveSalt, VIEW_WINDOW } from '../src/app.ts';
 import { sqliteStore } from '../src/sqlite.ts';
 import { d1Store } from '../src/d1.ts';
 import type { Store } from '../src/store.ts';
@@ -194,4 +194,13 @@ test('Workers 的 Durable Object：读者换页时更新附件并推送', () => 
   dobj.webSocketMessage(a, JSON.stringify({ page: '/posts/x/' }));
   dobj.webSocketMessage(watch, JSON.stringify({ page: '/' })); // 只看的连接报页面不算
   assert.equal(watch.got.length, 1);
+});
+
+test('没配 SALT 时自动生成一个存进库里，之后一直用它；配了就用配的', async () => {
+  const store = sqliteStore(':memory:');
+  await store.init();
+  const a = await resolveSalt(store);
+  assert.match(a, /^[0-9a-f]{32}$/);
+  assert.equal(await resolveSalt(store), a);
+  assert.equal(await resolveSalt(store, 'mine'), 'mine');
 });

@@ -1,8 +1,8 @@
 /**
  * Cloudflare Workers 入口。绑定见 wrangler.example.toml：D1 库 `DB`，在线访客的 Durable Object `ONLINE`，
- * 环境变量 ADMIN_TOKEN、TURNSTILE_SECRET、ALLOW_ORIGIN、SALT；发邮件提醒可以绑 send_email `EMAIL`。
+ * 环境变量 ADMIN_TOKEN、TURNSTILE_SECRET、ALLOW_ORIGIN、SALT（可选，不设就自动生成存进库里）；发邮件提醒可以绑 send_email `EMAIL`。
  */
-import { createApp, isBot, visitorKey, originAllowed, ipFrom, type AppOptions } from './app.ts';
+import { createApp, resolveSalt, isBot, visitorKey, originAllowed, ipFrom, type AppOptions } from './app.ts';
 import { d1Store, type D1Like } from './d1.ts';
 import { sendBinding, sendHttp, type EmailBinding } from './mail.ts';
 import { cleanPage } from './presence.ts';
@@ -22,14 +22,21 @@ interface Env {
   EMAIL?: EmailBinding;
 }
 
-/** 每个实例（isolate）第一次来的时候检查一次表结构，必要时升级；之后只是一个已完成的 Promise */
-let ready: Promise<void> | null = null;
+/** 每个实例（isolate）第一次来的时候检查一次表结构，必要时升级，并取出 SALT；之后只是一个已完成的 Promise */
+let ready: Promise<string> | null = null;
+const prepare = (env: Env) => (ready ??= (async () => {
+  const store = d1Store(env.DB);
+  await store.init();
+  return resolveSalt(store, env.SALT);
+})());
 
 export default {
   async fetch(req: Request, env: Env, ctx: unknown) {
     // 全站只有一个在线名单
     const presence = env.ONLINE ? env.ONLINE.get(env.ONLINE.idFromName('site')) : null;
     const url = new URL(req.url);
+    let salt: string;
+    try { salt = await prepare(env); } catch (e) { ready = null; return new Response(`数据库升级失败：${e instanceof Error ? e.message : e}`, { status: 500 }); }
 
     // 在线访客的 WebSocket：交给 Durable Object（规则同 node.ts）
     if (url.pathname === '/online/ws') {
@@ -37,16 +44,15 @@ export default {
       const ua = req.headers.get('user-agent') ?? '';
       const watch = url.searchParams.has('watch') || isBot(ua);
       if (!watch && !originAllowed(env.ALLOW_ORIGIN, req.headers.get('origin'))) return new Response('Forbidden', { status: 403 });
-      const visitor = watch ? '' : await visitorKey(env.SALT ?? 'mori', url.searchParams.get('visitor'), ipFrom((k) => req.headers.get(k)), ua);
+      const visitor = watch ? '' : await visitorKey(salt, url.searchParams.get('visitor'), ipFrom((k) => req.headers.get(k)), ua);
       const page = cleanPage(url.searchParams.get('page'));
       return presence.fetch(`https://online/ws?visitor=${visitor}${page ? `&page=${encodeURIComponent(page)}` : ''}`, { headers: req.headers });
     }
 
     const store = d1Store(env.DB);
-    try { await (ready ??= store.init()); } catch (e) { ready = null; return new Response(`数据库升级失败：${e instanceof Error ? e.message : e}`, { status: 500 }); }
     const app = createApp({
       store, adminToken: env.ADMIN_TOKEN, turnstileSecret: env.TURNSTILE_SECRET,
-      allowOrigin: env.ALLOW_ORIGIN, salt: env.SALT, autoApprove: env.AUTO_APPROVE,
+      allowOrigin: env.ALLOW_ORIGIN, salt, autoApprove: env.AUTO_APPROVE,
       runtime: 'workers', mailProviders: ['resend', 'cloudflare'],
       // Workers 不能用 SMTP；选了 Cloudflare 又绑了 send_email 就走绑定，其余走 HTTP 接口
       sendMail: (m, mail) => (m.provider === 'cloudflare' && env.EMAIL && !m.cloudflare.apiToken ? sendBinding(env.EMAIL, m, mail) : sendHttp(m, mail)),

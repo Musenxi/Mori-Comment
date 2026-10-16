@@ -2,7 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { serve } from '@hono/node-server';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { createApp, isBot, visitorKey, originAllowed, ipFrom, type AppOptions } from './app.ts';
+import { createApp, resolveSalt, isBot, visitorKey, originAllowed, ipFrom, type AppOptions } from './app.ts';
 import { sqliteStore } from './sqlite.ts';
 import { Presence, cleanPage } from './presence.ts';
 import { sendHttp, type SendMail } from './mail.ts';
@@ -18,8 +18,9 @@ const SWEEP = 30_000;
 export async function startNode(o: { dbPath: string; port: number } & Omit<AppOptions, 'store'>) {
   const store = sqliteStore(o.dbPath);
   await store.init();
+  const salt = await resolveSalt(store, o.salt);
   const presence = new Presence();
-  const app = createApp({ sendMail, runtime: 'node', mailProviders: ['smtp', 'resend', 'cloudflare'], ...o, store, online: async () => presence.count(), onView: (views) => presence.toWatchers({ views }) });
+  const app = createApp({ sendMail, runtime: 'node', mailProviders: ['smtp', 'resend', 'cloudflare'], ...o, salt, store, online: async () => presence.count(), onView: (views) => presence.toWatchers({ views }) });
   const server = serve({ fetch: app.fetch, port: o.port, hostname: '0.0.0.0' });
 
   /* 在线访客：/online/ws 的升级请求不经过 Hono，直接在这里接 */
@@ -33,7 +34,7 @@ export async function startNode(o: { dbPath: string; port: number } & Omit<AppOp
     const watch = url.searchParams.has('watch') || isBot(ua);
     if (!watch && !originAllowed(o.allowOrigin, req.headers.origin)) return refuse(socket, 403);
     const header = (k: string) => { const v = req.headers[k]; return Array.isArray(v) ? v[0] : v; };
-    const visitor = watch ? null : await visitorKey(o.salt ?? 'mori', url.searchParams.get('visitor'), ipFrom(header, req.socket.remoteAddress), ua);
+    const visitor = watch ? null : await visitorKey(salt, url.searchParams.get('visitor'), ipFrom(header, req.socket.remoteAddress), ua);
     wss.handleUpgrade(req, socket, head, (ws) => {
       const peer = { send: (m: string) => ws.send(m) };
       alive.set(ws, true);

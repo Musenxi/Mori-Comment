@@ -116,6 +116,16 @@ const parseCursor = (v: string | undefined) => {
   return m ? { createdAt: Number(m[1]), id: Number(m[2]) } : undefined;
 };
 
+/** 没配 SALT 就用库里存的；第一次运行时随机生成一个存起来 */
+export async function resolveSalt(store: Store, salt?: string) {
+  if (salt) return salt;
+  const saved = await store.getSetting('salt');
+  if (saved) return saved;
+  const fresh = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  await store.setSetting('salt', fresh);
+  return fresh;
+}
+
 export function createApp(opts: AppOptions) {
   const { store } = opts;
   const now = opts.now ?? Date.now;
