@@ -1,9 +1,8 @@
 # 评论服务（Node + SQLite）。源码是 TypeScript，靠 Node 的类型剥离直接运行，所以要 Node ≥ 22.18。
-FROM node:24-alpine
+FROM node:26-alpine
 WORKDIR /app
-RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile && pnpm store prune
+RUN npm install -g --no-fund "$(node -p "require('./package.json').packageManager")" && pnpm install --prod --frozen-lockfile && pnpm store prune
 COPY src ./src
 COPY bin ./bin
 COPY schema.sql ./schema.sql
