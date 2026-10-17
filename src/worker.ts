@@ -58,6 +58,7 @@ export default {
       sendMail: (m, mail) => (m.provider === 'cloudflare' && env.EMAIL && !m.cloudflare.apiToken ? sendBinding(env.EMAIL, m, mail) : sendHttp(m, mail)),
       online: presence ? async () => ((await (await presence.fetch('https://online/count')).json()) as { online: number }).online : undefined,
       onView: presence ? async (views) => { await presence.fetch('https://online/views', { method: 'POST', body: String(views) }); } : undefined,
+      onLike: presence ? async (likes) => { await presence.fetch('https://online/likes', { method: 'POST', body: String(likes) }); } : undefined,
     });
     return app.fetch(req, env, ctx as any);
   },

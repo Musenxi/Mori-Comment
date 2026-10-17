@@ -70,13 +70,41 @@ for (const [name, mk] of STORES) {
     assert.ok((await send('/views', { entry: '../etc' })).error);
   });
 
+  test(`[${name}] 点赞：一位读者一篇只算一次，可以取消；爬虫不计；参数要对`, async () => {
+    const { send, get } = await setup(mk);
+    assert.deepEqual(await get(`/likes?entry=posts/x&visitor=${A}`), { likes: 0, liked: false });
+    assert.deepEqual(await send('/likes', { entry: 'posts/x', visitor: A, liked: true }), { likes: 1, liked: true });
+    assert.deepEqual(await send('/likes', { entry: 'posts/x', visitor: A, liked: true }), { likes: 1, liked: true });
+    assert.deepEqual(await send('/likes', { entry: 'posts/x', visitor: B, liked: true }), { likes: 2, liked: true });
+    assert.deepEqual(await get(`/likes?entry=posts/x&visitor=${A}`), { likes: 2, liked: true });
+    assert.deepEqual(await send('/likes', { entry: 'posts/x', visitor: A, liked: false }), { likes: 1, liked: false });
+    assert.deepEqual(await get('/likes?entry=posts/y'), { likes: 0, liked: false });
+    assert.deepEqual(await send('/likes', { entry: 'posts/x', visitor: A, liked: true }, { 'user-agent': 'Googlebot/2.1' }), { likes: 1, liked: false });
+    assert.ok((await send('/likes', { entry: 'posts/x', visitor: A })).error);
+    assert.ok((await send('/likes', { entry: '../etc', visitor: A, liked: true })).error);
+  });
+
+  test(`[${name}] 点赞：真变了才推全站点赞数；管理接口里有总数`, async () => {
+    const store = mk();
+    await store.init();
+    const got: number[] = [];
+    const app = createApp({ store, adminToken: 't', salt: 's', onLike: (n) => { got.push(n); } });
+    const like = (visitor: string, liked: boolean) => app.request('/likes', { method: 'POST', headers: { 'user-agent': UA }, body: JSON.stringify({ entry: 'posts/x', visitor, liked }) });
+    await like(A, true); await like(A, true); await like(B, true); await like(A, false);
+    assert.deepEqual(got, [1, 2, 1]);
+    await app.request('/likes', { method: 'POST', headers: { 'user-agent': UA }, body: JSON.stringify({ entry: 'posts/y', visitor: A, liked: true }) });
+    const tr = await (await app.request('/admin/traffic', { headers: { Authorization: 'Bearer t' } })).json();
+    assert.equal(tr.likes, 2);
+    assert.deepEqual(tr.entries.sort((a: any, b: any) => a.entry.localeCompare(b.entry)), [{ entry: 'posts/x', views: 0, likes: 1 }, { entry: 'posts/y', views: 0, likes: 1 }]);
+  });
+
   test(`[${name}] 管理：总阅读量、每篇阅读量；没有在线名单时在线人数是 null；要令牌`, async () => {
     const { send, get } = await setup(mk);
     await send('/views', { entry: 'posts/x', visitor: A });
     await send('/views', { entry: 'posts/x', visitor: B });
     await send('/views', { entry: 'pages/about', visitor: A });
     assert.deepEqual(await get('/admin/traffic', { Authorization: 'Bearer t' }), {
-      views: 3, online: null, entries: [{ entry: 'posts/x', views: 2 }, { entry: 'pages/about', views: 1 }],
+      views: 3, likes: 0, online: null, entries: [{ entry: 'posts/x', views: 2, likes: 0 }, { entry: 'pages/about', views: 1, likes: 0 }],
     });
     assert.ok((await get('/admin/traffic')).error);
   });

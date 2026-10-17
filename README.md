@@ -103,7 +103,7 @@ comments: { provider: 'mori', endpoint: 'https://comments.example.com' }
 | `DELETE /admin/comments/:id` | 连同回复一起删除 |
 | `DELETE /admin/spam` | 清空垃圾箱，返回 `{ ok, removed }` |
 | `GET /admin/stats` | `{ pending, approved, hidden, spam }`；带 `?since=` 时多一个 `since`（之后读者发的评论数） |
-| `GET /admin/traffic` | `{ views, online, entries: [{ entry, views }] }` |
+| `GET /admin/traffic` | `{ views, likes, online, entries: [{ entry, views, likes }] }` |
 | `GET` / `PUT /admin/settings` | 防垃圾规则 `{ spam }` |
 | `GET` / `PUT /admin/mail` | 邮件提醒 `{ mail }`；密码、Key 只写不读，留空表示不改 |
 | `POST /admin/mail/test` | 给博主发测试信 |

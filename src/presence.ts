@@ -3,7 +3,7 @@
  * 同一位读者开几个页面只算一个；只看的连接（Studio 仪表盘）不算。
  * 连接可以报自己在读哪一页（连接时的 ?page=，换页时发 {"page": "/posts/x/"}）。
  * 人数或各页的人数一变就推给所有连接：{"online": n, "pages": [["/posts/x/", 2], …]}（人多的在前）；
- * 只看的连接另外收到全站阅读量的变化：{"views": n}
+ * 只看的连接另外收到全站阅读量、点赞数的变化：{"views": n}、{"likes": n}
  * Cloudflare Workers 上同样的事由 Durable Object 做，见 presence-do.ts。
  */
 export interface Peer { send(msg: string): void }

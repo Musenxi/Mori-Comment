@@ -46,5 +46,10 @@ export function sqliteStore(path: string): Store {
     async viewsOf(entry) { return one(SQL.viewsOf, entry)?.count ?? 0; },
     async totalViews() { return one(SQL.totalViews).n; },
     async listViews() { return all(SQL.listViews).map((r) => ({ entry: r.entry, views: r.views })); },
+    async likesOf(entry) { return one(SQL.likesOf, entry).n; },
+    async liked(visitor, entry) { return !!one(SQL.liked, entry, visitor); },
+    async setLike(visitor, entry, on, at) { if (on) db.prepare(SQL.like).run(entry, visitor, at); else db.prepare(SQL.unlike).run(entry, visitor); },
+    async totalLikes() { return one(SQL.totalLikes).n; },
+    async listLikes() { return all(SQL.listLikes).map((r) => ({ entry: r.entry, likes: r.likes })); },
   };
 }

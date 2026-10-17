@@ -6,10 +6,12 @@
  *   POST   /comments                         提交评论 / 引用评论 / 回复
  *   POST   /views     {entry, visitor}       记一次阅读，返回这一篇的阅读量
  *   GET    /views?entry=posts/xxx            某篇的阅读量
+ *   GET    /likes?entry=posts/xxx&visitor=…  某篇的点赞数，这位读者赞过没有：{likes, liked}
+ *   POST   /likes     {entry, visitor, liked} 点赞（liked: true）或取消（false），返回同上
  *   GET    /online                           在线人数
  *   GET    /online/ws?visitor=…&page=/x/     WebSocket：连着就算在线，换页时发 {"page": "/y/"}；
  *                                            人数或各页人数一变就推 {"online": n, "pages": [["/x/", n], …]}；
- *                                            ?watch=1 只看、不算在线（Studio 仪表盘），另外每记一次阅读推 {"views": 全站阅读量}
+ *                                            ?watch=1 只看、不算在线（Studio 仪表盘），另外每记一次阅读推 {"views": 全站阅读量}，点赞变了推 {"likes": 全站点赞数}
  *                                            （升级请求不经过这里：Node 见 node.ts，Workers 见 worker.ts）
  *   /admin/*                                 管理接口，只接受管理令牌（Authorization: Bearer <token>），见 README 的“管理接口”
  */
@@ -40,6 +42,8 @@ export interface AppOptions {
   online?: () => Promise<number | null>;
   /** 记了一次阅读之后调用，参数是全站阅读量（推给只看的连接） */
   onView?: (total: number) => void | Promise<void>;
+  /** 点赞数变了之后调用，参数是全站点赞数 */
+  onLike?: (total: number) => void | Promise<void>;
   now?: () => number;
   fetchImpl?: typeof fetch;
   /** 发一封邮件（Node 和 Workers 各自实现，见 node.ts、worker.ts）；不给就不发提醒 */
@@ -244,6 +248,26 @@ export function createApp(opts: AppOptions) {
     return c.json({ views: await store.viewsOf(entry) });
   });
 
+  const likesOf = async (visitor: string, entry: string) => ({ likes: await store.likesOf(entry), liked: await store.liked(visitor, entry) });
+
+  app.get('/likes', async (c) => {
+    const entry = c.req.query('entry') ?? '';
+    if (!ENTRY.test(entry)) return c.json({ error: 'entry 不合法' }, 400);
+    return c.json(await likesOf(await visitorKey(salt, c.req.query('visitor'), ipOf(c), c.req.header('user-agent') ?? ''), entry));
+  });
+
+  app.post('/likes', async (c) => {
+    const b = await bodyOf(c);
+    const entry = typeof b?.entry === 'string' ? b.entry : '';
+    if (!ENTRY.test(entry) || typeof b.liked !== 'boolean') return c.json({ error: '参数不对' }, 400);
+    const visitor = await visitorKey(salt, b.visitor, ipOf(c), c.req.header('user-agent') ?? '');
+    if (!isBot(c.req.header('user-agent')) && (await store.liked(visitor, entry)) !== b.liked) {
+      await store.setLike(visitor, entry, b.liked, now());
+      if (opts.onLike) await Promise.resolve(opts.onLike(await store.totalLikes())).catch(() => {});
+    }
+    return c.json(await likesOf(visitor, entry));
+  });
+
   app.get('/online', async (c) => c.json({ online: await online() }));
 
   /* ───────────── 管理接口 ───────────── */
@@ -281,7 +305,7 @@ export function createApp(opts: AppOptions) {
     service: 'mori-comments', version: pkg.version, api: API_VERSION, schema: Number(await opts.store.getSetting('schema_version')) || 0, runtime: opts.runtime ?? null,
     features: {
       mail: opts.sendMail ? (opts.mailProviders ?? []) : [],
-      online: !!opts.online, turnstile: !!opts.turnstileSecret, cursor: true, since: true,
+      online: !!opts.online, turnstile: !!opts.turnstileSecret, cursor: true, since: true, likes: true,
     },
     autoApprove: opts.autoApprove ?? 'returning',
   }));
@@ -358,8 +382,11 @@ export function createApp(opts: AppOptions) {
     return c.json({ ...(await store.countByStatus()), ...(since === undefined ? {} : { since: await store.countSince(since) }) });
   });
   admin.get('/traffic', async (c) => {
-    const entries = await store.listViews();
-    return c.json({ views: entries.reduce((a, e) => a + e.views, 0), online: await online(), entries });
+    // 每篇的阅读量和点赞数：有人赞、还没人读过（数据是旧的）的也列上
+    const likes = new Map((await store.listLikes()).map((e) => [e.entry, e.likes]));
+    const entries = (await store.listViews()).map((e) => ({ ...e, likes: likes.get(e.entry) ?? 0 }));
+    for (const [entry, n] of likes) if (!entries.some((e) => e.entry === entry)) entries.push({ entry, views: 0, likes: n });
+    return c.json({ views: entries.reduce((a, e) => a + e.views, 0), likes: entries.reduce((a, e) => a + e.likes, 0), online: await online(), entries });
   });
   admin.patch('/comments/:id', async (c) => {
     const id = Number(c.req.param('id'));

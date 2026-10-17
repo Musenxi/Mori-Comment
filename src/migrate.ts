@@ -5,7 +5,7 @@ import { SCHEMA } from './schema.ts';
  * 库里的版本在 settings 表（schema_version）；服务启动时和代码里的不一样，就把库升到最新：
  * 建缺的表和索引、补缺的列、旧的状态约束重建，数据都保留。SQLite 和 D1 走同一套，不用再手动执行 migrations-*.sql。
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /** 两种存储各自实现：查询，和“一批语句一起提交（要么都成功，要么都不动）” */
 export interface Sql {

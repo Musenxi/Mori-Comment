@@ -44,5 +44,13 @@ CREATE TABLE IF NOT EXISTS view_recent (
 );
 CREATE INDEX IF NOT EXISTS idx_view_recent_at ON view_recent (at);
 
+-- 点赞：同一位读者对同一篇只算一次，可以取消
+CREATE TABLE IF NOT EXISTS likes (
+  entry   TEXT    NOT NULL,
+  visitor TEXT    NOT NULL,                  -- 读者标识的加盐哈希（同上）
+  at      INTEGER NOT NULL,
+  PRIMARY KEY (entry, visitor)
+);
+
 -- 游记并入文章之前评论记的是 travels/<id>，改成 posts/<id>（可重复执行）
 UPDATE comments SET entry = 'posts/' || substr(entry, 9) WHERE entry LIKE 'travels/%';

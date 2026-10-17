@@ -76,6 +76,17 @@ export interface Store {
   totalViews(): Promise<number>;
   /** 每篇的阅读量，多的在前 */
   listViews(): Promise<Array<{ entry: string; views: number }>>;
+
+  /* 点赞 */
+  likesOf(entry: string): Promise<number>;
+  /** 这位读者有没有赞过这一篇 */
+  liked(visitor: string, entry: string): Promise<boolean>;
+  /** 点赞或取消 */
+  setLike(visitor: string, entry: string, on: boolean, at: number): Promise<void>;
+  /** 全站点赞数 */
+  totalLikes(): Promise<number>;
+  /** 每篇的点赞数（没人赞的不列） */
+  listLikes(): Promise<Array<{ entry: string; likes: number }>>;
 }
 
 /** SQL 的公共部分：SQLite 和 D1 都是 `?` 占位符 */
@@ -107,6 +118,13 @@ export const SQL = {
   viewsOf: `SELECT count FROM views WHERE entry = ?`,
   listViews: `SELECT entry, count AS views FROM views ORDER BY count DESC, entry ASC`,
   totalViews: `SELECT COALESCE(SUM(count), 0) AS n FROM views`,
+
+  likesOf: `SELECT COUNT(*) AS n FROM likes WHERE entry = ?`,
+  liked: `SELECT 1 AS x FROM likes WHERE entry = ? AND visitor = ?`,
+  like: `INSERT INTO likes (entry, visitor, at) VALUES (?, ?, ?) ON CONFLICT (entry, visitor) DO NOTHING`,
+  unlike: `DELETE FROM likes WHERE entry = ? AND visitor = ?`,
+  totalLikes: `SELECT COUNT(*) AS n FROM likes`,
+  listLikes: `SELECT entry, COUNT(*) AS likes FROM likes GROUP BY entry`,
 };
 
 /** 数据库列 → 驼峰 */

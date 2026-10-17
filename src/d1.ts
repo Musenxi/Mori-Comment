@@ -49,5 +49,10 @@ export function d1Store(db: D1Like): Store {
     async viewsOf(entry) { return (await one(SQL.viewsOf, entry))?.count ?? 0; },
     async totalViews() { return (await one(SQL.totalViews)).n; },
     async listViews() { return (await all(SQL.listViews)).map((r) => ({ entry: r.entry, views: r.views })); },
+    async likesOf(entry) { return (await one(SQL.likesOf, entry)).n; },
+    async liked(visitor, entry) { return !!(await one(SQL.liked, entry, visitor)); },
+    async setLike(visitor, entry, on, at) { if (on) await run(SQL.like, entry, visitor, at); else await run(SQL.unlike, entry, visitor); },
+    async totalLikes() { return (await one(SQL.totalLikes)).n; },
+    async listLikes() { return (await all(SQL.listLikes)).map((r) => ({ entry: r.entry, likes: r.likes })); },
   };
 }

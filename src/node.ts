@@ -20,7 +20,7 @@ export async function startNode(o: { dbPath: string; port: number } & Omit<AppOp
   await store.init();
   const salt = await resolveSalt(store, o.salt);
   const presence = new Presence();
-  const app = createApp({ sendMail, runtime: 'node', mailProviders: ['smtp', 'resend', 'cloudflare'], ...o, salt, store, online: async () => presence.count(), onView: (views) => presence.toWatchers({ views }) });
+  const app = createApp({ sendMail, runtime: 'node', mailProviders: ['smtp', 'resend', 'cloudflare'], ...o, salt, store, online: async () => presence.count(), onView: (views) => presence.toWatchers({ views }), onLike: (likes) => presence.toWatchers({ likes }) });
   const server = serve({ fetch: app.fetch, port: o.port, hostname: '0.0.0.0' });
 
   /* 在线访客：/online/ws 的升级请求不经过 Hono，直接在这里接 */

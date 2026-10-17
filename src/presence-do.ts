@@ -22,8 +22,8 @@ export class OnlinePresence {
   async fetch(req: Request) {
     const url = new URL(req.url);
     if (url.pathname === '/count') return Response.json({ online: this.snapshot().online });
-    if (url.pathname === '/views') { // 记了一次阅读：推给只看的连接
-      const msg = JSON.stringify({ views: Number(await req.text()) });
+    if (url.pathname === '/views' || url.pathname === '/likes') { // 记了一次阅读、点赞数变了：推给只看的连接
+      const msg = JSON.stringify({ [url.pathname.slice(1)]: Number(await req.text()) });
       for (const ws of this.state.getWebSockets()) if (!seat(ws).visitor) try { ws.send(msg); } catch { /* 已断开 */ }
       return new Response(null, { status: 204 });
     }
