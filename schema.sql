@@ -51,6 +51,3 @@ CREATE TABLE IF NOT EXISTS likes (
   at      INTEGER NOT NULL,
   PRIMARY KEY (entry, visitor)
 );
-
--- 游记并入文章之前评论记的是 travels/<id>，改成 posts/<id>（可重复执行）
-UPDATE comments SET entry = 'posts/' || substr(entry, 9) WHERE entry LIKE 'travels/%';

@@ -37,7 +37,7 @@ test('D1：空库自己建表，记下表结构版本，重复启动不出错', 
   assert.deepEqual(await store.countByStatus(), { pending: 0, approved: 0, hidden: 0, spam: 0 });
 });
 
-test('D1：只有头两版结构的老库升级后评论都在，能进垃圾箱，回复关系不丢', async () => {
+test('D1：少列的表升级后评论都在，能进垃圾箱，回复关系不丢', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec(`CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT, entry TEXT NOT NULL, block TEXT, start INTEGER, "end" INTEGER, quote TEXT, prefix TEXT, suffix TEXT, body TEXT NOT NULL, name TEXT NOT NULL, email_hash TEXT, ip_hash TEXT, created_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'hidden')), parent_id INTEGER REFERENCES comments(id));
     INSERT INTO comments (entry, body, name, created_at, status) VALUES ('posts/a', '旧评论', '老朋友', 1, 'approved');
