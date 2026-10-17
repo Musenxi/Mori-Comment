@@ -90,6 +90,14 @@ comments: { provider: 'mori', endpoint: 'https://comments.example.com' }
 | Resend | 填 API Key；发信域名需先在 Resend 验证 |
 | Cloudflare Email Service | Workers 版绑定 `send_email`（见 `wrangler.example.toml`）即可；Node 版填账号 ID 和 API 令牌。发信域名需先接入 |
 
+## 公开接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /comments?entry=posts/xxx` | 已通过的评论。参数 `page`（默认 1，超出末页取末页）、`limit`（1–50，默认 20）。顶层评论新的在前、按顶层评论分页，这一页每条顶层评论的回复（从早到晚）跟在后面。返回 `{ comments, total, page, pages, limit }`，`total` 是这篇文章全部评论数（含回复） |
+| `GET /comments?entry=posts/xxx&annotations=1` | 这篇文章全部引用评论（block 不为空）和它们的回复，不分页。返回 `{ comments, total }` |
+| `POST /comments` | 提交评论、引用评论、回复 |
+
 ## 管理接口
 
 都在 `/admin/` 下，请求头带 `Authorization: Bearer <ADMIN_TOKEN>`。令牌不对返回 401，服务没设令牌返回 503；出错时返回 `{ "error": "原因" }`。

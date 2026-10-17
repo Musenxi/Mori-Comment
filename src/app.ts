@@ -2,7 +2,8 @@
  * Mori 自建评论的 HTTP 接口（spec §5.1）。Hono 写一份，Node 和 Cloudflare Workers 共用；
  * 存储通过 Store 接口注入（SQLite / D1）。
  *
- *   GET    /comments?entry=posts/xxx         某篇文章下已通过的评论（含划词引用评论）
+ *   GET    /comments?entry=posts/xxx&page=1&limit=20   某篇文章下已通过的评论，顶层新的在前、按顶层分页，每条顶层评论的回复（从早到晚）跟在同一页里
+ *   GET    /comments?entry=posts/xxx&annotations=1     这篇文章全部引用评论和它们的回复（正文标注、划词时用，不分页）
  *   POST   /comments                         提交评论 / 引用评论 / 回复
  *   POST   /views     {entry, visitor}       记一次阅读，返回这一篇的阅读量
  *   GET    /views?entry=posts/xxx            某篇的阅读量
@@ -152,7 +153,18 @@ export function createApp(opts: AppOptions) {
   app.get('/comments', async (c) => {
     const entry = c.req.query('entry') ?? '';
     if (!ENTRY.test(entry)) return c.json({ error: 'entry 不合法' }, 400);
-    return c.json({ comments: (await store.listApproved(entry)).map(publicOf) });
+    const counts = await store.countApproved(entry);
+    if (c.req.query('annotations')) {
+      const rows = await store.listAnnotated(entry);
+      const replies = await store.repliesOf(rows.map((r) => r.id));
+      return c.json({ comments: [...rows, ...replies].map(publicOf), total: counts.all });
+    }
+    const limit = Math.min(Math.max(Number(c.req.query('limit')) || 20, 1), 50);
+    const pages = Math.max(1, Math.ceil(counts.top / limit));
+    const page = Math.min(Math.max(Math.floor(Number(c.req.query('page'))) || 1, 1), pages);
+    const top = await store.pageTop(entry, limit, (page - 1) * limit);
+    const replies = await store.repliesOf(top.map((r) => r.id));
+    return c.json({ comments: [...top, ...replies].map(publicOf), total: counts.all, page, pages, limit });
   });
 
   app.post('/comments', async (c) => {

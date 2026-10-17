@@ -45,6 +45,14 @@ export interface Store {
   get(id: number): Promise<CommentRow | null>;
   /** 某篇文章下已通过的评论，按时间从早到晚 */
   listApproved(entry: string): Promise<CommentRow[]>;
+  /** 公开列表：这篇文章已通过的顶层评论，新的在前，取 offset 起的 limit 条 */
+  pageTop(entry: string, limit: number, offset: number): Promise<CommentRow[]>;
+  /** 这些顶层评论已通过的回复，从早到晚 */
+  repliesOf(ids: number[]): Promise<CommentRow[]>;
+  /** 这篇文章已通过的顶层评论数、全部评论数（含回复） */
+  countApproved(entry: string): Promise<{ top: number; all: number }>;
+  /** 已通过的引用评论（block 不为空），从早到晚 */
+  listAnnotated(entry: string): Promise<CommentRow[]>;
   /** 管理用：按 AdminQuery 筛选，新的在前 */
   listAdmin(q: AdminQuery): Promise<CommentRow[]>;
   countByStatus(): Promise<Record<Status, number>>;
@@ -95,6 +103,10 @@ export const SQL = {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   get: `SELECT * FROM comments WHERE id = ?`,
   listApproved: `SELECT * FROM comments WHERE entry = ? AND status = 'approved' ORDER BY created_at ASC, id ASC`,
+  pageTop: `SELECT * FROM comments WHERE entry = ? AND status = 'approved' AND parent_id IS NULL ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+  repliesOf: (n: number) => `SELECT * FROM comments WHERE status = 'approved' AND parent_id IN (${Array(n).fill('?').join(',')}) ORDER BY created_at ASC, id ASC`,
+  countApproved: `SELECT COUNT(*) AS \`all\`, COALESCE(SUM(parent_id IS NULL), 0) AS top FROM comments WHERE entry = ? AND status = 'approved'`,
+  listAnnotated: `SELECT * FROM comments WHERE entry = ? AND status = 'approved' AND block IS NOT NULL ORDER BY created_at ASC, id ASC`,
   // 筛选条件传 NULL 表示不限；SQLite 和 D1 都是同一条语句
   listAdmin: `SELECT * FROM comments WHERE (CASE WHEN ? IS NULL THEN status != 'spam' ELSE status = ? END) AND (? IS NULL OR entry = ?)
              AND (? IS NULL OR created_at > ?) AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))

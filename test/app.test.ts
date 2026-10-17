@@ -61,6 +61,36 @@ for (const [name, mk] of STORES) {
     assert.equal(list.comments.length, 2);
   });
 
+  test(`[${name}] 公开列表：顶层新的在前、按顶层分页，回复跟着父评论从早到晚；引用评论单独取`, async () => {
+    const { call, admin, post, tick } = await setup();
+    const say = async (body: string, extra: Record<string, unknown> = {}) => {
+      tick(1000);
+      return ((await (await admin('POST', '/comments', { entry: ENTRY, name: '博主', body, ...extra })).json()) as any).comment;
+    };
+    const a = await say('a'), b = await say('b'), c = await say('c');
+    await say('c-late', { parentId: c.id }); // 先发的回复在前
+    await say('a-reply', { parentId: a.id });
+    tick(1000);
+    await post({ body: 'b-quote', block: 'p1', start: 0, end: 3, quote: '一二三' });
+    const pend: any = ((await (await admin('GET', '/comments?status=pending')).json()) as any).comments[0];
+    await admin('PATCH', `/comments/${pend.id}`, { status: 'approved' });
+    const get = async (q: string) => (await (await call('GET', `/comments?entry=${ENTRY}&${q}`)).json()) as any;
+    const p1 = await get('page=1&limit=2');
+    assert.deepEqual([p1.page, p1.pages, p1.total], [1, 2, 6]); // 顶层 4 条（a b c 加引用）
+    assert.deepEqual(p1.comments.filter((x: any) => !x.parentId).map((x: any) => x.body), ['b-quote', 'c']);
+    assert.deepEqual(p1.comments.filter((x: any) => x.parentId).map((x: any) => x.body), ['c-late']);
+    const p2 = await get('page=2&limit=2');
+    assert.deepEqual(p2.comments.map((x: any) => x.body), ['b', 'a', 'a-reply']);
+    assert.equal((await get('page=9&limit=2')).page, 2); // 超出末页取末页
+    const an = await get('annotations=1');
+    assert.equal(an.comments.length, 1);
+    assert.equal(an.comments[0].quote, '一二三');
+    assert.equal(an.comments[0].body, 'b-quote');
+    assert.equal(an.comments[0].email, undefined);
+    assert.equal(an.total, 6);
+    void b;
+  });
+
   test(`[${name}] 对外的字段里没有邮箱、IP`, async () => {
     const { post, call } = await setup({ autoApprove: 'all' });
     await post({ email: 'x@y.zz' });
