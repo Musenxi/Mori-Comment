@@ -1,6 +1,6 @@
 {
   "name": "mori-comments",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mori 自建评论服务：文末评论 + 划词引用评论。Hono 写一份，同时跑在 Cloudflare Workers（D1）和 Node（SQLite）上。",
   "license": "MIT",
   "type": "module",
