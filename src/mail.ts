@@ -90,7 +90,8 @@ const MONO = `Menlo,Consolas,'SF Mono',monospace`;
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const accentOf = (m: MailSettings) => (/^#[0-9a-f]{6}$/i.test(m.accent) ? m.accent : '#002fa7');
-const link = (m: MailSettings, entry: string, id?: number) => (m.site ? `${m.site}/${entry}/${id ? `#c${id}` : ''}` : '');
+/** 文章在 /posts/…/，独立页面（entry 是 pages/…）直接在 /…/ */
+const link = (m: MailSettings, entry: string, id?: number) => (m.site ? `${m.site}/${entry.replace(/^pages\//, '')}/${id ? `#c${id}` : ''}` : '');
 const page = (title: string | undefined, entry: string) => (title ? `《${title}》` : entry);
 
 /** 评论正文：Markdown 节点 → 带行内样式的 HTML（文字全部转义，链接只有 http / https） */

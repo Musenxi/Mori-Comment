@@ -47,6 +47,10 @@ test('新评论提醒博主：带文章名、链接；垃圾箱里的、关掉�
   assert.equal(sent[0].mail.to, 'me@example.com');
   assert.match(sent[0].mail.subject, /《你好》有新评论/);
   assert.match(sent[0].mail.text, new RegExp(`https://blog.example.com/posts/hello/#c${r.comment.id}`));
+  const pg = await post({ body: '留言', entry: 'pages/guestbook' });
+  await tick();
+  assert.match(sent[1].mail.text, new RegExp(`https://blog.example.com/guestbook/#c${pg.comment.id}`));
+  sent.length = 1;
   await admin('PUT', '/settings', { spam: { words: ['广告'] } });
   await post({ body: '打广告' });
   await tick();
