@@ -35,6 +35,7 @@ export function sqliteStore(path: string): Store {
     async countSince(since) { return one(SQL.countSince, since).n; },
     async countByStatus() { return statusCounts(all(SQL.count)); },
     async setStatus(id, status: Status) { return Number(db.prepare(SQL.setStatus).run(status, id).changes) > 0; },
+    async setBody(id, body: string) { return Number(db.prepare(SQL.setBody).run(body, id).changes) > 0; },
     async clearSpam() { return Number(db.prepare(SQL.clearSpam).run().changes); },
     async remove(id) { return Number(db.prepare(SQL.remove).run(id, id).changes) > 0; },
     async countRecentByIp(ip, since) { return one(SQL.countRecentByIp, ip, since).n; },

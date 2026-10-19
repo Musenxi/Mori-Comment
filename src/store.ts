@@ -59,6 +59,7 @@ export interface Store {
   /** since 之后读者发的评论有几条（垃圾箱和博主自己发的不算） */
   countSince(since: number): Promise<number>;
   setStatus(id: number, status: Status): Promise<boolean>;
+  setBody(id: number, body: string): Promise<boolean>;
   /** 删除；有回复时回复一起删 */
   remove(id: number): Promise<boolean>;
   /** 清空垃圾箱，返回删了几条 */
@@ -114,6 +115,7 @@ export const SQL = {
   count: `SELECT status, COUNT(*) AS n FROM comments GROUP BY status`,
   countSince: `SELECT COUNT(*) AS n FROM comments WHERE created_at > ? AND status != 'spam' AND author = 0`,
   setStatus: `UPDATE comments SET status = ? WHERE id = ?`,
+  setBody: `UPDATE comments SET body = ? WHERE id = ?`,
   clearSpam: `DELETE FROM comments WHERE status = 'spam' OR parent_id IN (SELECT id FROM comments WHERE status = 'spam')`,
   remove: `DELETE FROM comments WHERE id = ? OR parent_id = ?`,
   countRecentByIp: `SELECT COUNT(*) AS n FROM comments WHERE ip = ? AND created_at > ?`,

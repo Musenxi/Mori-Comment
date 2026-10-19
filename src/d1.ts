@@ -35,6 +35,7 @@ export function d1Store(db: D1Like): Store {
     async countSince(since) { return (await one(SQL.countSince, since)).n; },
     async countByStatus() { return statusCounts(await all(SQL.count)); },
     async setStatus(id, status: Status) { return (await run(SQL.setStatus, status, id)).meta.changes > 0; },
+    async setBody(id, body: string) { return (await run(SQL.setBody, body, id)).meta.changes > 0; },
     async clearSpam() { return (await run(SQL.clearSpam)).meta.changes; },
     async remove(id) { return (await run(SQL.remove, id, id)).meta.changes > 0; },
     async countRecentByIp(ip, since) { return (await one(SQL.countRecentByIp, ip, since)).n; },

@@ -402,7 +402,12 @@ export function createApp(opts: AppOptions) {
   });
   admin.patch('/comments/:id', async (c) => {
     const id = Number(c.req.param('id'));
-    const { status } = await c.req.json().catch(() => ({}));
+    const { status, body: text } = await c.req.json().catch(() => ({}));
+    if (typeof text === 'string') { // 改正文
+      const body = clip(text, LIMITS.body);
+      if (!body) return c.json({ error: '评论不能是空的' }, 400);
+      return Number.isInteger(id) && (await store.setBody(id, body)) ? c.json({ ok: true }) : c.json({ error: '没有这条评论' }, 404);
+    }
     if (!Number.isInteger(id) || !['pending', 'approved', 'hidden', 'spam'].includes(status)) return c.json({ error: '参数不对' }, 400);
     const before = Number.isInteger(id) ? await store.get(id) : null;
     if (!before || !(await store.setStatus(id, status))) return c.json({ error: '没有这条评论' }, 404);
