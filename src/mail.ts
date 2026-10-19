@@ -82,10 +82,9 @@ export function publicMail(m: MailSettings) {
 }
 
 /* ───────────── 信的内容 ─────────────
-   邮件客户端只认得老式 HTML：表格排版、全部行内样式。颜色照站点的纸、墨、细线，链接用主题色。 */
+   邮件客户端只认得老式 HTML：表格排版、全部行内样式。白底、灰黑字，链接用主题色。 */
 
-const C = { paper: '#f3f0e9', card: '#fffdf8', line: '#e4ded2', ink: '#1d1b18', soft: '#55504a', muted: '#8a8378', code: '#f1ede4' };
-const SERIF = `'Songti SC','STSong','Noto Serif SC','Source Han Serif SC',Georgia,serif`;
+const C = { paper: '#e9e7e2', line: '#dcdcdc', ink: '#111111', soft: '#666666', muted: '#8c8c8c', code: '#f4f4f4' };
 const SANS = `-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Arial,sans-serif`;
 const MONO = `Menlo,Consolas,'SF Mono',monospace`;
 
@@ -117,24 +116,28 @@ function md(m: MailSettings, nodes: MdNode[]): string {
     }
   }).join('');
 }
-const body = (m: MailSettings, text: string, color = C.ink) => `<div style="font:15px/1.8 ${SANS};color:${color};word-break:break-word">${md(m, parseComment(text))}</div>`;
+const body = (m: MailSettings, text: string, color = C.ink) => `<div style="color:${color};word-break:break-word">${md(m, parseComment(text))}</div>`;
 
-/** 整封信：纸色底，上面一行站名，下面一张卡片 */
-function layout(m: MailSettings, o: { kicker: string; heading: string; content: string; action?: { href: string; label: string } }) {
-  const a = accentOf(m), site = esc(m.fromName || '');
-  const brand = m.site ? `<a href="${esc(m.site)}" style="color:${C.soft};text-decoration:none">${site}</a>` : site;
-  const action = o.action ? `<tr><td style="padding:22px 0 0;font:14px/1.6 ${SANS}"><a href="${esc(o.action.href)}" style="color:${a};text-decoration:none;font-weight:500">${esc(o.action.label)} &rarr;</a></td></tr>` : '';
+/** 整封信：杂志封面式。粗黑线、超大标题、页眉页脚用小号大写字母；只有一块主题色 */
+function layout(m: MailSettings, o: { heading: string; content: string; link?: { href: string; label: string }; no?: number; where?: string }) {
+  const a = accentOf(m), site = esc((m.fromName || 'BLOG').toUpperCase());
+  const brand = m.site ? `<a href="${esc(m.site)}" style="color:${C.ink};text-decoration:none">${site}</a>` : site;
+  const label = esc(m.fromName || (m.site ? m.site.replace(/^https?:\/\//, '') : '博客'));
+  const name = m.site ? `<a href="${esc(m.site)}" style="color:${C.ink};text-decoration:none">${label}</a>` : label;
+  const small = `font:600 11px/1.6 ${SANS};letter-spacing:.22em;text-transform:uppercase`;
+  const no = o.no ? `NO.&nbsp;${String(o.no).padStart(3, '0')}` : '';
+  const where = o.where ? `<tr><td style="padding:0 0 22px;font:13px/1.7 ${SANS};color:${C.soft};border-bottom:1px solid ${C.ink}">${o.where}</td></tr><tr><td style="height:26px;line-height:26px">&nbsp;</td></tr>` : '';
+  const btn = o.link ? `<tr><td style="padding:30px 0 0"><a href="${esc(o.link.href)}" style="display:block;background:${C.ink};color:#ffffff;text-decoration:none;padding:16px 22px;${small}">${esc(o.link.label)}<span style="float:right;color:${a}">&rarr;</span></a></td></tr>` : '';
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"></head>
 <body style="margin:0;padding:0;background:${C.paper}">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.paper}"><tr><td align="center" style="padding:36px 16px 40px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px">
-<tr><td style="padding:0 6px 14px;font:13px/1.6 ${SERIF};letter-spacing:.16em;color:${C.soft}">${brand}</td></tr>
-<tr><td style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:30px 30px 28px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.paper}"><tr><td align="center" style="padding:28px 14px 44px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border-top:8px solid ${C.ink}">
+<tr><td style="padding:18px 32px 0">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:0 0 6px;font:12px/1.6 ${SANS};letter-spacing:.08em;color:${C.muted}">${o.kicker}</td></tr>
-<tr><td style="padding:0 0 20px;font:21px/1.5 ${SERIF};color:${C.ink};letter-spacing:.02em">${o.heading}</td></tr>
-<tr><td>${o.content}</td></tr>
-${action}
+<tr><td style="padding:0 0 46px;${small};color:${C.ink}">${brand}</td><td align="right" style="padding:0 0 46px;${small};color:${a}">${no}</td></tr>
+<tr><td colspan="2" style="padding:0 0 30px;font:800 38px/1.18 ${SANS};letter-spacing:-.01em;color:${C.ink}">${o.heading}</td></tr>
+<tr><td colspan="2"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${where}<tr><td>${o.content}</td></tr>${btn}</table></td></tr>
+<tr><td colspan="2" style="padding:40px 0 26px"><div style="border-top:1px solid ${C.ink};padding-top:12px;font:13px/1.7 ${SANS};color:${C.muted}">此邮件由 ${name} 自动发送，请勿直接回复。</div></td></tr>
 </table>
 </td></tr>
 </table>
@@ -142,12 +145,12 @@ ${action}
 </body></html>`;
 }
 
-/** 一条评论：名字（博主发的带标记）、一行附属信息、正文 */
-function comment(m: MailSettings, c: { name: string; body: string }, meta: string[], dim = false) {
-  const info = meta.filter(Boolean).map(esc).join(' &middot; ');
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${dim ? ` style="border-left:2px solid ${C.line}"` : ''}><tr><td style="${dim ? 'padding:0 0 0 14px' : ''}">
-<div style="font:600 14px/1.6 ${SANS};color:${dim ? C.soft : C.ink}">${esc(c.name)}${info ? `<span style="font-weight:400;color:${C.muted}">&nbsp;&nbsp;${info}</span>` : ''}</div>
-<div style="padding-top:6px">${body(m, c.body, dim ? C.soft : C.ink)}</div>
+/** 一段话：名字用小号大写，正文放大，左侧一道粗线；quiet 的是被回复的那条，退后一档 */
+function said(m: MailSettings, who: string, text: string, quiet = false) {
+  const border = quiet ? C.line : C.ink;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px"><tr><td style="border-left:${quiet ? 2 : 4}px solid ${border};padding:2px 0 2px 18px">
+<div style="font:600 11px/1.6 ${SANS};letter-spacing:.2em;text-transform:uppercase;color:${quiet ? C.muted : C.ink};padding:0 0 8px">${who}</div>
+<div style="font:${quiet ? 14 : 18}px/1.85 ${SANS};color:${quiet ? C.soft : C.ink}">${body(m, text, quiet ? C.soft : C.ink)}</div>
 </td></tr></table>`;
 }
 
@@ -159,16 +162,16 @@ export function authorMail(m: MailSettings, c: MailComment, title?: string): Mai
   // 待审的评论在页面上还没有，链接只到文章
   const where = page(title, c.entry), url = link(m, c.entry, pending ? undefined : c.id);
   const who = [c.name, c.email, c.url, c.ip].filter(Boolean).join(' · ');
-  const heading = url ? `<a href="${esc(url)}" style="color:${C.ink};text-decoration:none">${esc(where)}</a>` : esc(where);
+  const info = [c.email, c.url, c.ip].filter(Boolean).map((x) => esc(x!)).join(' &middot; ');
   return {
     to: m.to,
     subject: `${where}有新评论${pending ? '（待审）' : ''}：${c.name}`,
     text: `${who}\n\n${c.body}\n${url ? `\n${url}\n` : ''}`,
     html: layout(m, {
-      kicker: pending ? '新评论 · 待审' : '新评论',
-      heading,
-      content: comment(m, c, [c.email ?? '', c.url ?? '', c.ip ?? '']),
-      action: url ? { href: url, label: pending ? '打开文章' : '查看评论' } : undefined,
+      heading: pending ? '新评论<br>待审' : '新评论',
+      no: c.id, where: esc(where),
+      content: said(m, `${esc(c.name)}${info ? `<span style="font-weight:400;letter-spacing:.04em;text-transform:none;color:${C.muted}">&nbsp;&nbsp;${info}</span>` : ''}`, c.body),
+      link: url ? { href: url, label: pending ? '打开文章' : '查看评论' } : undefined,
     }),
   };
 }
@@ -176,16 +179,14 @@ export function authorMail(m: MailSettings, c: MailComment, title?: string): Mai
 /** 有人回复：给被回复的读者 */
 export function replyMail(m: MailSettings, to: string, parent: { name: string; body: string }, reply: MailComment, title?: string): Mail {
   const where = page(title, reply.entry), url = link(m, reply.entry, reply.id), from = m.fromName || '博客';
-  const heading = `${esc(reply.name)} 回复了你`;
   return {
     to,
     subject: `${reply.name} 回复了你在${where}的评论`,
     text: `${parent.name}，你的评论：\n${parent.body}\n\n${reply.name} 的回复：\n${reply.body}\n${url ? `\n${url}\n` : ''}\n—— ${from}\n`,
     html: layout(m, {
-      kicker: url ? `<a href="${esc(url)}" style="color:${C.muted};text-decoration:none">${esc(where)}</a>` : esc(where),
-      heading,
-      content: comment(m, parent, ['你的评论'], true) + `<div style="height:20px;line-height:20px">&nbsp;</div>` + comment(m, reply, []),
-      action: url ? { href: url, label: '查看回复' } : undefined,
+      heading: '有人<br>回复了你', no: reply.id, where: esc(where),
+      content: said(m, '你的评论', parent.body, true) + said(m, esc(reply.name), reply.body),
+      link: url ? { href: url, label: '查看回复' } : undefined,
     }),
   };
 }
@@ -193,7 +194,7 @@ export function replyMail(m: MailSettings, to: string, parent: { name: string; b
 export function testMail(m: MailSettings): Mail {
   return {
     to: m.to, subject: '评论服务的测试邮件', text: '能收到这封信，邮件提醒就设置好了。\n',
-    html: layout(m, { kicker: '测试', heading: '邮件提醒设置好了', content: `<div style="font:15px/1.8 ${SANS};color:${C.ink}">能收到这封信，提醒就能发出来。</div>` }),
+    html: layout(m, { heading: '邮件提醒<br>设置好了', content: `<div style="font:18px/1.85 ${SANS};color:${C.ink}">能收到这封信，提醒就能发出来。</div>` }),
   };
 }
 
