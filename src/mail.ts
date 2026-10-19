@@ -84,7 +84,7 @@ export function publicMail(m: MailSettings) {
 /* ───────────── 信的内容 ─────────────
    邮件客户端只认得老式 HTML：表格排版、全部行内样式。白底、灰黑字，链接用主题色。 */
 
-const C = { paper: '#e9e7e2', line: '#dcdcdc', ink: '#111111', soft: '#666666', muted: '#8c8c8c', code: '#f4f4f4' };
+const C = { paper: '#ffffff', line: '#dcdcdc', ink: '#111111', soft: '#666666', muted: '#8c8c8c', code: '#f4f4f4' };
 const SANS = `-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Arial,sans-serif`;
 const MONO = `Menlo,Consolas,'SF Mono',monospace`;
 
@@ -106,9 +106,9 @@ function md(m: MailSettings, nodes: MdNode[]): string {
       case 'b': return `<strong style="font-weight:600">${kids(n)}</strong>`;
       case 'i': return `<em>${kids(n)}</em>`;
       case 'del': return `<del style="color:${C.muted}">${kids(n)}</del>`;
-      case 'code': return `<code style="font:13px/1.5 ${MONO};background:${C.code};padding:1px 5px;border-radius:3px">${esc(n.text ?? '')}</code>`;
+      case 'code': return `<code style="font-family:${MONO};font-size:13px;line-height:1.5;background:${C.code};padding:1px 5px;border-radius:3px">${esc(n.text ?? '')}</code>`;
       case 'a': return `<a href="${esc(n.href ?? '')}" style="color:${a};text-decoration:none">${kids(n)}</a>`;
-      case 'pre': return `<pre style="${top};padding:10px 14px;background:${C.code};border-radius:6px;font:13px/1.6 ${MONO};white-space:pre-wrap;word-break:break-all">${esc(n.text ?? '')}</pre>`;
+      case 'pre': return `<pre style="${top};padding:10px 14px;background:${C.code};border-radius:6px;font-family:${MONO};font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-all">${esc(n.text ?? '')}</pre>`;
       case 'quote': return `<blockquote style="${top};padding:0 0 0 12px;border-left:2px solid ${C.line};color:${C.soft}">${kids(n)}</blockquote>`;
       case 'ul': return `<ul style="${top};padding-left:1.4em">${items(n)}</ul>`;
       case 'ol': return `<ol start="${n.start ?? 1}" style="${top};padding-left:1.4em">${items(n)}</ol>`;
@@ -124,20 +124,20 @@ function layout(m: MailSettings, o: { heading: string; content: string; link?: {
   const brand = m.site ? `<a href="${esc(m.site)}" style="color:${C.ink};text-decoration:none">${site}</a>` : site;
   const label = esc(m.fromName || (m.site ? m.site.replace(/^https?:\/\//, '') : '博客'));
   const name = m.site ? `<a href="${esc(m.site)}" style="color:${C.ink};text-decoration:none">${label}</a>` : label;
-  const small = `font:600 11px/1.6 ${SANS};letter-spacing:.22em;text-transform:uppercase`;
+  const small = `font-family:${SANS};font-size:11px;line-height:1.6;font-weight:600;letter-spacing:.22em;text-transform:uppercase`;
   const no = o.no ? `NO.&nbsp;${String(o.no).padStart(3, '0')}` : '';
-  const where = o.where ? `<tr><td style="padding:0 0 22px;font:13px/1.7 ${SANS};color:${C.soft};border-bottom:1px solid ${C.ink}">${o.where}</td></tr><tr><td style="height:26px;line-height:26px">&nbsp;</td></tr>` : '';
+  const where = o.where ? `<tr><td style="padding:0 0 22px;font-family:${SANS};font-size:13px;line-height:1.7;color:${C.soft};border-bottom:1px solid ${C.ink}">${o.where}</td></tr><tr><td style="height:26px;line-height:26px">&nbsp;</td></tr>` : '';
   const btn = o.link ? `<tr><td style="padding:30px 0 0"><a href="${esc(o.link.href)}" style="display:block;background:${C.ink};color:#ffffff;text-decoration:none;padding:16px 22px;${small}">${esc(o.link.label)}<span style="float:right;color:${a}">&rarr;</span></a></td></tr>` : '';
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"></head>
 <body style="margin:0;padding:0;background:${C.paper}">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.paper}"><tr><td align="center" style="padding:28px 14px 44px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border-top:8px solid ${C.ink}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.paper}"><tr><td align="center" style="padding:20px 14px 44px">
+<table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:520px;max-width:100%;background:#ffffff;border-top:8px solid ${C.ink}">
 <tr><td style="padding:18px 32px 0">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr><td style="padding:0 0 46px;${small};color:${C.ink}">${brand}</td><td align="right" style="padding:0 0 46px;${small};color:${a}">${no}</td></tr>
-<tr><td colspan="2" style="padding:0 0 30px;font:800 38px/1.18 ${SANS};letter-spacing:-.01em;color:${C.ink}">${o.heading}</td></tr>
+<tr><td colspan="2" style="padding:0 0 30px;font-family:${SANS};font-size:38px;line-height:1.18;font-weight:800;letter-spacing:-.01em;color:${C.ink}">${o.heading}</td></tr>
 <tr><td colspan="2"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${where}<tr><td>${o.content}</td></tr>${btn}</table></td></tr>
-<tr><td colspan="2" style="padding:40px 0 26px"><div style="border-top:1px solid ${C.ink};padding-top:12px;font:13px/1.7 ${SANS};color:${C.muted}">此邮件由 ${name} 自动发送，请勿直接回复。</div></td></tr>
+<tr><td colspan="2" style="padding:40px 0 26px"><div style="border-top:1px solid ${C.ink};padding-top:12px;font-family:${SANS};font-size:13px;line-height:1.7;color:${C.muted}">此邮件由 ${name} 自动发送，请勿直接回复。</div></td></tr>
 </table>
 </td></tr>
 </table>
@@ -149,8 +149,8 @@ function layout(m: MailSettings, o: { heading: string; content: string; link?: {
 function said(m: MailSettings, who: string, text: string, quiet = false) {
   const border = quiet ? C.line : C.ink;
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px"><tr><td style="border-left:${quiet ? 2 : 4}px solid ${border};padding:2px 0 2px 18px">
-<div style="font:600 11px/1.6 ${SANS};letter-spacing:.2em;text-transform:uppercase;color:${quiet ? C.muted : C.ink};padding:0 0 8px">${who}</div>
-<div style="font:${quiet ? 14 : 18}px/1.85 ${SANS};color:${quiet ? C.soft : C.ink}">${body(m, text, quiet ? C.soft : C.ink)}</div>
+<div style="font-family:${SANS};font-size:11px;line-height:1.6;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:${quiet ? C.muted : C.ink};padding:0 0 8px">${who}</div>
+<div style="font-family:${SANS};font-size:${quiet ? 14 : 18}px;line-height:1.85;color:${quiet ? C.soft : C.ink}">${body(m, text, quiet ? C.soft : C.ink)}</div>
 </td></tr></table>`;
 }
 
@@ -162,7 +162,7 @@ export function authorMail(m: MailSettings, c: MailComment, title?: string): Mai
   // 待审的评论在页面上还没有，链接只到文章
   const where = page(title, c.entry), url = link(m, c.entry, pending ? undefined : c.id);
   const who = [c.name, c.email, c.url, c.ip].filter(Boolean).join(' · ');
-  const info = [c.email, c.url, c.ip].filter(Boolean).map((x) => esc(x!)).join(' &middot; ');
+  const info = [c.email && `<a href="mailto:${esc(c.email)}" style="color:${C.muted};text-decoration:none">${esc(c.email)}</a>`, c.url && esc(c.url), c.ip && esc(c.ip)].filter(Boolean).join(' &middot; ');
   return {
     to: m.to,
     subject: `${where}有新评论${pending ? '（待审）' : ''}：${c.name}`,
@@ -194,7 +194,7 @@ export function replyMail(m: MailSettings, to: string, parent: { name: string; b
 export function testMail(m: MailSettings): Mail {
   return {
     to: m.to, subject: '评论服务的测试邮件', text: '能收到这封信，邮件提醒就设置好了。\n',
-    html: layout(m, { heading: '邮件提醒<br>设置好了', content: `<div style="font:18px/1.85 ${SANS};color:${C.ink}">能收到这封信，提醒就能发出来。</div>` }),
+    html: layout(m, { heading: '邮件提醒<br>设置好了', content: `<div style="font-family:${SANS};font-size:18px;line-height:1.85;color:${C.ink}">能收到这封信，提醒就能发出来。</div>` }),
   };
 }
 
