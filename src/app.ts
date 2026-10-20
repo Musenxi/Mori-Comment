@@ -377,7 +377,7 @@ export function createApp(opts: AppOptions) {
     if (m.provider === 'off') return c.json({ error: '邮件提醒没有打开' }, 400);
     if (!m.to) return c.json({ error: '还没有填收件邮箱' }, 400);
     if (!opts.sendMail) return c.json({ error: '这个评论服务不能发邮件' }, 501);
-    try { await opts.sendMail(m, testMail(m)); } catch (e) { return c.json({ error: `发送失败：${(e as Error).message}` }, 502); }
+    try { await opts.sendMail(m, testMail(m, await loadEmoji(m.site, fetch, true))); } catch (e) { return c.json({ error: `发送失败：${(e as Error).message}` }, 502); }
     return c.json({ ok: true });
   });
   /** 管理设置：防垃圾规则 */

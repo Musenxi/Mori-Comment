@@ -98,6 +98,10 @@ test('先审的回复：提交时不提醒读者，在 Studio 里通过时才提
 });
 
 test('测试邮件：发到博主邮箱；发不出去把原因带回来', async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = (async () => new Response('', { status: 404 })) as typeof fetch;
+  try { await run(); } finally { globalThis.fetch = real; }
+  async function run() {
   const ok = await setup();
   await ok.on();
   assert.equal((await ok.admin('POST', '/mail/test')).status, 200);
@@ -107,6 +111,25 @@ test('测试邮件：发到博主邮箱；发不出去把原因带回来', async
   const r = await bad.admin('POST', '/mail/test');
   assert.equal(r.status, 502);
   assert.match(((await r.json()) as any).error, /连不上/);
+  }
+});
+
+test('测试邮件：带上表情清单的状态，取到了就放一个示例表情', async () => {
+  const real = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ '蛆音娘_1huaji': '/emoji/蛆音娘/1huaji.png' }))) as typeof fetch;
+    const a = await setup();
+    await a.on();
+    await a.admin('POST', '/mail/test');
+    assert.match(a.sent[0].mail.text, /表情清单：取到 1 个/);
+    assert.match(a.sent[0].mail.html, /<img src="https:\/\/blog\.example\.com\/emoji\//);
+    globalThis.fetch = (async () => new Response('', { status: 403 })) as typeof fetch;
+    const b = await setup();
+    await b.on();
+    await b.admin('POST', '/mail/test');
+    assert.match(b.sent[0].mail.text, /表情清单：没取到（https:\/\/blog\.example\.com\/emoji\.json 返回 403）/);
+    assert.doesNotMatch(b.sent[0].mail.html, /<img /);
+  } finally { globalThis.fetch = real; setEmoji(SITE, {}); }
 });
 
 test('表情：邮件里按站点的表情清单换成图片，清单里没有的原样写成文字', async () => {

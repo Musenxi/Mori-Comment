@@ -94,21 +94,28 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const EMOJI_TTL = 10 * 60_000, EMOJI_RETRY = 60_000;
 const emojiCache = new Map<string, { at: number; ttl: number; map: Record<string, string> }>();
 
-/** 取站点的表情清单并缓存（10 分钟）。站点没开、没有这个文件、超时都当没有，邮件里表情照原样写成文字 */
-export async function loadEmoji(site: string, fetcher: typeof fetch = fetch): Promise<void> {
-  if (!site) return;
+/** 取站点的表情清单并缓存（10 分钟）。站点没开、没有这个文件、超时都当没有，邮件里表情照原样写成文字；返回这次的结果，force 时不看缓存 */
+export async function loadEmoji(site: string, fetcher: typeof fetch = fetch, force = false): Promise<{ ok: boolean; count: number; error?: string }> {
+  if (!site) return { ok: false, count: 0, error: '没有填站点地址' };
   const hit = emojiCache.get(site);
-  if (hit && Date.now() - hit.at < hit.ttl) return;
-  let map: Record<string, string> = {};
+  if (!force && hit && Date.now() - hit.at < hit.ttl) return { ok: !!Object.keys(hit.map).length, count: Object.keys(hit.map).length };
+  let map: Record<string, string> = {}, error: string | undefined;
   try {
     const r = await fetcher(`${site}/emoji.json`, { signal: AbortSignal.timeout(3000) });
-    if (r.ok) {
+    if (!r.ok) error = `${site}/emoji.json 返回 ${r.status}`;
+    else {
       const j = (await r.json()) as unknown;
       if (j && typeof j === 'object' && !Array.isArray(j)) for (const [k, v] of Object.entries(j)) if (typeof v === 'string') map[k] = v;
+      if (!Object.keys(map).length) error = '清单是空的或格式不对';
     }
-  } catch { map = {}; }
+  } catch (e) { map = {}; error = (e as Error).message || String(e); }
+  if (error) console.warn(`表情清单没取到：${error}`);
   emojiCache.set(site, { at: Date.now(), ttl: Object.keys(map).length ? EMOJI_TTL : EMOJI_RETRY, map });
+  return { ok: !error, count: Object.keys(map).length, error };
 }
+
+/** 清单里挑一个表情给测试邮件用 */
+export const sampleEmoji = (site: string) => { const k = Object.keys(emojiCache.get(site)?.map ?? {}); return k.find((x) => x.endsWith('_1huaji')) ?? k[0]; };
 
 /** 清单给的地址：绝对的 http / https 照用，站内路径接在站点地址后面；别的一律不要 */
 const emojiUrl = (m: MailSettings, name: string) => {
@@ -229,10 +236,13 @@ export function replyMail(m: MailSettings, to: string, parent: { name: string; b
   };
 }
 
-export function testMail(m: MailSettings): Mail {
+export function testMail(m: MailSettings, emoji?: { ok: boolean; count: number; error?: string }): Mail {
+  const key = emoji?.ok ? sampleEmoji(m.site) : undefined;
+  const line = emoji ? (emoji.ok ? `表情清单：取到 ${emoji.count} 个${key ? `，下面是 :[${key}]` : ''}` : `表情清单：没取到（${emoji.error ?? '原因不明'}）`) : '';
+  const demo = key ? `<div style="font-size:18px;line-height:2">${md(m, parseComment(`:[${key}]`))}</div>` : '';
   return {
-    to: m.to, subject: '评论服务的测试邮件', text: '能收到这封信，邮件提醒就设置好了。\n',
-    html: layout(m, { heading: '邮件提醒<br>设置好了', content: `<div style="font-family:${SANS};font-size:18px;line-height:1.85;color:${C.ink}">能收到这封信，提醒就能发出来。</div>` }),
+    to: m.to, subject: '评论服务的测试邮件', text: `能收到这封信，邮件提醒就设置好了。\n${line ? `${line}\n` : ''}`,
+    html: layout(m, { heading: '邮件提醒<br>设置好了', content: `<div style="font-family:${SANS};font-size:18px;line-height:1.85;color:${C.ink}">能收到这封信，提醒就能发出来。</div>${line ? `<div style="font-family:${SANS};font-size:13px;line-height:1.7;color:${C.muted};margin-top:12px">${esc(line)}</div>${demo}` : ''}` }),
   };
 }
 
