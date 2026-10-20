@@ -20,7 +20,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { md5 } from './md5.ts';
 import { NO_RULES, blocked, cleanRules, type SpamRules } from './spam.ts';
-import { authorMail, cleanMail, publicMail, readMail, replyMail, testMail, type MailComment, type SendMail } from './mail.ts';
+import { authorMail, cleanMail, loadEmoji, publicMail, readMail, replyMail, testMail, type MailComment, type SendMail } from './mail.ts';
 import type { Store, CommentRow, Status } from './store.ts';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -298,6 +298,7 @@ export function createApp(opts: AppOptions) {
     if (!opts.sendMail) return;
     const m = await mailSettings();
     if (m.provider === 'off') return;
+    await loadEmoji(m.site);
     const mc: MailComment = { id: c.id, entry: c.entry, name: c.name, email: c.email, url: c.url, ip: c.ip, body: c.body, status: c.status };
     const jobs: Promise<void>[] = [];
     if (toAuthor && m.notifyAuthor && m.to && !c.author) jobs.push(opts.sendMail(m, authorMail(m, mc, title)));

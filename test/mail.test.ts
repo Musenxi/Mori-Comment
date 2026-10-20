@@ -2,9 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/app.ts';
 import { sqliteStore } from '../src/sqlite.ts';
-import type { Mail, MailSettings } from '../src/mail.ts';
+import { loadEmoji, setEmoji, type Mail, type MailSettings } from '../src/mail.ts';
 
 const ENTRY = 'posts/hello';
+const SITE = 'https://blog.example.com';
+// 默认没有表情清单（别让测试去真的连网）；要用的测试自己放一份
+setEmoji(SITE, {});
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
 async function setup(fail = false, autoApprove: 'all' | 'none' = 'all') {
@@ -104,4 +107,35 @@ test('测试邮件：发到博主邮箱；发不出去把原因带回来', async
   const r = await bad.admin('POST', '/mail/test');
   assert.equal(r.status, 502);
   assert.match(((await r.json()) as any).error, /连不上/);
+});
+
+test('表情：邮件里按站点的表情清单换成图片，清单里没有的原样写成文字', async () => {
+  setEmoji(SITE, { '蛆音娘_1huaji': '/emoji/蛆音娘/1huaji.png', '外链_x': 'https://cdn.example.com/a%20b.png', '坏_y': 'javascript:alert(1)' });
+  try {
+    const { sent, post, on } = await setup();
+    await on();
+    await post({ body: '好:[蛆音娘_1huaji]呀:[外链_x]:[没有_z]:[坏_y]' });
+    await tick();
+    assert.equal(sent.length, 1);
+    const html = sent[0].mail.html;
+    assert.match(html, /<img src="https:\/\/blog\.example\.com\/emoji\/%E8%9B%86%E9%9F%B3%E5%A8%98\/1huaji\.png" alt=":\[蛆音娘_1huaji\]"/);
+    assert.match(html, /<img src="https:\/\/cdn\.example\.com\/a%20b\.png"/);
+    assert.match(html, /:\[没有_z\]/);
+    assert.match(html, /:\[坏_y\]/);
+    assert.doesNotMatch(html, /javascript:/);
+    assert.match(sent[0].mail.text, /:\[蛆音娘_1huaji\]/);
+  } finally { setEmoji(SITE, {}); }
+});
+
+test('表情清单：取不到或格式不对就当没有；取到的缓存起来', async () => {
+  const site = 'https://emoji-test.example.com';
+  let n = 0;
+  const ok = (async () => { n++; return new Response(JSON.stringify({ 'a_b': '/e/a.png', 'bad': 3 })); }) as typeof fetch;
+  await loadEmoji(site, ok);
+  await loadEmoji(site, ok);
+  assert.equal(n, 1);
+  const site2 = 'https://emoji-fail.example.com';
+  await loadEmoji(site2, (async () => { throw new Error('超时'); }) as typeof fetch);
+  await loadEmoji('https://emoji-404.example.com', (async () => new Response('', { status: 404 })) as typeof fetch);
+  await loadEmoji('https://emoji-array.example.com', (async () => new Response('[1,2]')) as typeof fetch);
 });

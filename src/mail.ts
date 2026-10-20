@@ -89,6 +89,39 @@ const SANS = `-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB',
 const MONO = `Menlo,Consolas,'SF Mono',monospace`;
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+/* ───────────── 表情：站点构建时导出 /emoji.json（{ "包名_表情名": 图片地址 }），邮件里按它换成图片 ───────────── */
+
+const EMOJI_TTL = 10 * 60_000, EMOJI_RETRY = 60_000;
+const emojiCache = new Map<string, { at: number; ttl: number; map: Record<string, string> }>();
+
+/** 取站点的表情清单并缓存（10 分钟）。站点没开、没有这个文件、超时都当没有，邮件里表情照原样写成文字 */
+export async function loadEmoji(site: string, fetcher: typeof fetch = fetch): Promise<void> {
+  if (!site) return;
+  const hit = emojiCache.get(site);
+  if (hit && Date.now() - hit.at < hit.ttl) return;
+  let map: Record<string, string> = {};
+  try {
+    const r = await fetcher(`${site}/emoji.json`, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) {
+      const j = (await r.json()) as unknown;
+      if (j && typeof j === 'object' && !Array.isArray(j)) for (const [k, v] of Object.entries(j)) if (typeof v === 'string') map[k] = v;
+    }
+  } catch { map = {}; }
+  emojiCache.set(site, { at: Date.now(), ttl: Object.keys(map).length ? EMOJI_TTL : EMOJI_RETRY, map });
+}
+
+/** 清单给的地址：绝对的 http / https 照用，站内路径接在站点地址后面；别的一律不要 */
+const emojiUrl = (m: MailSettings, name: string) => {
+  const u = emojiCache.get(m.site)?.map[name];
+  if (!u) return undefined;
+  const enc = (x: string) => { try { return encodeURI(decodeURI(x)); } catch { return encodeURI(x); } };
+  const abs = /^https?:\/\//i.test(u) ? u : u.startsWith('/') ? `${m.site}${enc(u)}` : '';
+  return /^https?:\/\/[^\s]+$/i.test(abs) ? abs : undefined;
+};
+
+/** 测试用：直接放一份清单 */
+export const setEmoji = (site: string, map: Record<string, string>) => { emojiCache.set(site, { at: Date.now(), ttl: EMOJI_TTL, map }); };
+
 const accentOf = (m: MailSettings) => (/^#[0-9a-f]{6}$/i.test(m.accent) ? m.accent : '#002fa7');
 /** 文章在 /posts/…/，独立页面（entry 是 pages/…）直接在 /…/ */
 const link = (m: MailSettings, entry: string, id?: number) => (m.site ? `${m.site}/${entry.replace(/^pages\//, '')}/${id ? `#c${id}` : ''}` : '');
@@ -104,6 +137,10 @@ function md(m: MailSettings, nodes: MdNode[]): string {
     switch (n.type) {
       case 'text': return esc(n.text ?? '');
       case 'br': return '<br>';
+      case 'emoji': {
+        const u = emojiUrl(m, n.name ?? '');
+        return u ? `<img src="${esc(u)}" alt="${esc(`:[${n.name}]`)}" title="${esc(n.name ?? '')}" height="36" style="height:36px;width:auto;vertical-align:middle;border:0;margin:0 2px">` : esc(`:[${n.name}]`);
+      }
       case 'b': return `<strong style="font-weight:600">${kids(n)}</strong>`;
       case 'i': return `<em>${kids(n)}</em>`;
       case 'del': return `<del style="color:${C.muted}">${kids(n)}</del>`;

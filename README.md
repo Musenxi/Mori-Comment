@@ -90,6 +90,8 @@ comments: { provider: 'mori', endpoint: 'https://comments.example.com' }
 | Resend | 填 API Key；发信域名需先在 Resend 验证 |
 | Cloudflare Email Service | Workers 版绑定 `send_email`（见 `wrangler.example.toml`）即可；Node 版填账号 ID 和 API 令牌。发信域名需先接入 |
 
+邮件里的表情（`:[包名_表情名]`）：发信时从「站点地址」取 `/emoji.json`（Mori 主题构建时自动生成，内容是 `{ "包名_表情名": 图片地址 }`），有清单就换成图片，取不到就原样写成文字。清单缓存 10 分钟，所以站点要在「设定 → 评论 → 邮件提醒」里填了站点地址。
+
 ## 公开接口
 
 | 接口 | 说明 |
