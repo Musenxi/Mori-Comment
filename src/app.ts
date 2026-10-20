@@ -49,6 +49,8 @@ export interface AppOptions {
   fetchImpl?: typeof fetch;
   /** 发一封邮件（Node 和 Workers 各自实现，见 node.ts、worker.ts）；不给就不发提醒 */
   sendMail?: SendMail;
+  /** 取站点的表情清单用的 fetch；Workers 里绑了站点的 Worker 就走服务绑定（不经过站点域名的人机验证），不给就用全局 fetch */
+  siteFetch?: typeof fetch;
   /** 跑在哪里（/admin/info 里给出） */
   runtime?: 'node' | 'workers';
   /** 这个运行环境能用的发信方式 */
@@ -298,7 +300,7 @@ export function createApp(opts: AppOptions) {
     if (!opts.sendMail) return;
     const m = await mailSettings();
     if (m.provider === 'off') return;
-    await loadEmoji(m.site);
+    await loadEmoji(m.site, opts.siteFetch);
     const mc: MailComment = { id: c.id, entry: c.entry, name: c.name, email: c.email, url: c.url, ip: c.ip, body: c.body, status: c.status };
     const jobs: Promise<void>[] = [];
     if (toAuthor && m.notifyAuthor && m.to && !c.author) jobs.push(opts.sendMail(m, authorMail(m, mc, title)));
@@ -377,7 +379,7 @@ export function createApp(opts: AppOptions) {
     if (m.provider === 'off') return c.json({ error: '邮件提醒没有打开' }, 400);
     if (!m.to) return c.json({ error: '还没有填收件邮箱' }, 400);
     if (!opts.sendMail) return c.json({ error: '这个评论服务不能发邮件' }, 501);
-    try { await opts.sendMail(m, testMail(m, await loadEmoji(m.site, fetch, true))); } catch (e) { return c.json({ error: `发送失败：${(e as Error).message}` }, 502); }
+    try { await opts.sendMail(m, testMail(m, await loadEmoji(m.site, opts.siteFetch, true))); } catch (e) { return c.json({ error: `发送失败：${(e as Error).message}` }, 502); }
     return c.json({ ok: true });
   });
   /** 管理设置：防垃圾规则 */

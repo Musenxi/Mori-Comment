@@ -10,11 +10,11 @@ const SITE = 'https://blog.example.com';
 setEmoji(SITE, {});
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
-async function setup(fail = false, autoApprove: 'all' | 'none' = 'all') {
+async function setup(fail = false, autoApprove: 'all' | 'none' = 'all', siteFetch?: typeof fetch) {
   const store = sqliteStore(':memory:');
   await store.init();
   const sent: Array<{ m: MailSettings; mail: Mail }> = [];
-  const app = createApp({ store, adminToken: 't', autoApprove, sendMail: async (m, mail) => { if (fail) throw new Error('连不上'); sent.push({ m, mail }); } });
+  const app = createApp({ store, adminToken: 't', autoApprove, siteFetch, sendMail: async (m, mail) => { if (fail) throw new Error('连不上'); sent.push({ m, mail }); } });
   let ip = 0;
   const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, { method, headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': `10.0.0.${++ip}`, ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -161,4 +161,21 @@ test('表情清单：取不到或格式不对就当没有；取到的缓存起�
   await loadEmoji(site2, (async () => { throw new Error('超时'); }) as typeof fetch);
   await loadEmoji('https://emoji-404.example.com', (async () => new Response('', { status: 404 })) as typeof fetch);
   await loadEmoji('https://emoji-array.example.com', (async () => new Response('[1,2]')) as typeof fetch);
+});
+
+test('表情清单走 siteFetch（服务绑定）：不碰全局 fetch；站点域名挡人机验证时也能取到', async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = (async () => new Response('', { status: 403, headers: { 'cf-mitigated': 'challenge' } })) as typeof fetch;
+  try {
+    const viaBinding = (async () => new Response(JSON.stringify({ '蛆音娘_1huaji': '/emoji/蛆音娘/1huaji.png' }))) as typeof fetch;
+    const a = await setup(false, 'all', viaBinding);
+    await a.on();
+    await a.admin('POST', '/mail/test');
+    assert.match(a.sent[0].mail.text, /表情清单：取到 1 个/);
+    setEmoji(SITE, {});
+    const b = await setup();
+    await b.on();
+    await b.admin('POST', '/mail/test');
+    assert.match(b.sent[0].mail.text, /返回 403（challenge）/);
+  } finally { globalThis.fetch = real; setEmoji(SITE, {}); }
 });

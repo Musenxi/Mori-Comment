@@ -25,6 +25,11 @@ new_sqlite_classes = ["OnlinePresence"]
 # [[send_email]]
 # name = "EMAIL"
 
+# 站点也在 Cloudflare Workers 上的话，绑上它：邮件里的表情清单（站点的 /emoji.json）走服务绑定去取，不会被站点域名的人机验证拦住
+# [[services]]
+# binding = "SITE"
+# service = "站点 Worker 的名字"
+
 [vars]
 ALLOW_ORIGIN = "https://你的站点"   # 允许调用评论接口的站点，多个用逗号分隔
 # AUTO_APPROVE = "returning"        # returning 第一次留言先审 / all 全部直接发 / none 全部先审

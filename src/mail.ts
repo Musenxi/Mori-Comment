@@ -95,14 +95,14 @@ const EMOJI_TTL = 10 * 60_000, EMOJI_RETRY = 60_000;
 const emojiCache = new Map<string, { at: number; ttl: number; map: Record<string, string> }>();
 
 /** 取站点的表情清单并缓存（10 分钟）。站点没开、没有这个文件、超时都当没有，邮件里表情照原样写成文字；返回这次的结果，force 时不看缓存 */
-export async function loadEmoji(site: string, fetcher: typeof fetch = fetch, force = false): Promise<{ ok: boolean; count: number; error?: string }> {
+export async function loadEmoji(site: string, fetcher: typeof fetch = (input, init) => fetch(input, init), force = false): Promise<{ ok: boolean; count: number; error?: string }> {
   if (!site) return { ok: false, count: 0, error: '没有填站点地址' };
   const hit = emojiCache.get(site);
   if (!force && hit && Date.now() - hit.at < hit.ttl) return { ok: !!Object.keys(hit.map).length, count: Object.keys(hit.map).length };
   let map: Record<string, string> = {}, error: string | undefined;
   try {
     const r = await fetcher(`${site}/emoji.json`, { signal: AbortSignal.timeout(3000) });
-    if (!r.ok) error = `${site}/emoji.json 返回 ${r.status}`;
+    if (!r.ok) error = `${site}/emoji.json 返回 ${r.status}${r.headers.get('cf-mitigated') ? `（${r.headers.get('cf-mitigated')}）` : ''}`;
     else {
       const j = (await r.json()) as unknown;
       if (j && typeof j === 'object' && !Array.isArray(j)) for (const [k, v] of Object.entries(j)) if (typeof v === 'string') map[k] = v;

@@ -20,6 +20,8 @@ interface Env {
   AUTO_APPROVE?: AppOptions['autoApprove'];
   /** Cloudflare Email Service 的 send_email 绑定；有它就不用在 Studio 里填账号 ID 和令牌 */
   EMAIL?: EmailBinding;
+  /** 站点的 Worker（服务绑定）：邮件里取表情清单走它，不经过站点域名的人机验证；没绑就用公网请求 */
+  SITE?: { fetch(input: string | URL | Request, init?: RequestInit): Promise<Response> };
 }
 
 /** 每个实例（isolate）第一次来的时候检查一次表结构，必要时升级，并取出 SALT；之后只是一个已完成的 Promise */
@@ -54,6 +56,7 @@ export default {
       store, adminToken: env.ADMIN_TOKEN, turnstileSecret: env.TURNSTILE_SECRET,
       allowOrigin: env.ALLOW_ORIGIN, salt, autoApprove: env.AUTO_APPROVE,
       runtime: 'workers', mailProviders: ['resend', 'cloudflare'],
+      siteFetch: env.SITE ? ((input, init) => env.SITE!.fetch(input as string, init)) as typeof fetch : undefined,
       // Workers 不能用 SMTP；选了 Cloudflare 又绑了 send_email 就走绑定，其余走 HTTP 接口
       sendMail: (m, mail) => (m.provider === 'cloudflare' && env.EMAIL && !m.cloudflare.apiToken ? sendBinding(env.EMAIL, m, mail) : sendHttp(m, mail)),
       online: presence ? async () => ((await (await presence.fetch('https://online/count')).json()) as { online: number }).online : undefined,
