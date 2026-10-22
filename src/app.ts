@@ -152,20 +152,33 @@ export function createApp(opts: AppOptions) {
 
   /* ───────────── 公开接口 ───────────── */
 
+  /** 一层层取回复的回复，直到没有新的 */
+  const allReplies = async (ids: number[]) => {
+    const out: CommentRow[] = [];
+    const seen = new Set(ids);
+    for (let level = ids; level.length;) {
+      level = (await store.repliesOf(level)).filter((r) => !seen.has(r.id));
+      level.forEach((r) => seen.add(r.id));
+      out.push(...level);
+      level = level.map((r) => r.id);
+    }
+    return out;
+  };
+
   app.get('/comments', async (c) => {
     const entry = c.req.query('entry') ?? '';
     if (!ENTRY.test(entry)) return c.json({ error: 'entry 不合法' }, 400);
     const counts = await store.countApproved(entry);
     if (c.req.query('annotations')) {
       const rows = await store.listAnnotated(entry);
-      const replies = await store.repliesOf(rows.map((r) => r.id));
+      const replies = await allReplies(rows.map((r) => r.id));
       return c.json({ comments: [...rows, ...replies].map(publicOf), total: counts.all });
     }
     const limit = Math.min(Math.max(Number(c.req.query('limit')) || 20, 1), 50);
     const pages = Math.max(1, Math.ceil(counts.top / limit));
     const page = Math.min(Math.max(Math.floor(Number(c.req.query('page'))) || 1, 1), pages);
     const top = await store.pageTop(entry, limit, (page - 1) * limit);
-    const replies = await store.repliesOf(top.map((r) => r.id));
+    const replies = await allReplies(top.map((r) => r.id));
     return c.json({ comments: [...top, ...replies].map(publicOf), total: counts.all, page, pages, limit });
   });
 
